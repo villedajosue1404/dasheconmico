@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Centro de Mando</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0c0c10;--bg2:#14141a;--bg3:#1c1c24;--bg4:#24242e;--bg5:#2c2c38;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--text:#eeeef5;--text2:#8888a8;--text3:#44445a;--accent:#7c6dfa;--accent2:#5b4de0;--accent-bg:rgba(124,109,250,0.1);--fb:#4a90d9;--fb-bg:rgba(74,144,217,0.1);--tg:#34c78a;--tg-bg:rgba(52,199,138,0.1);--success:#34c78a;--warn:#f5a623;--danger:#e05252;--r:10px;--r2:14px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;height:100vh;overflow:hidden}
+.shell{display:flex;height:100vh}
+
+/* SIDEBAR */
+.sidebar{width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.brand{padding:16px 16px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.brand-icon{width:30px;height:30px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.brand-name{font-weight:600;font-size:14px;letter-spacing:-.3px}
+.brand-sub{font-size:10px;color:var(--text3)}
+.nav-label{padding:12px 14px 4px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+.nb{display:flex;align-items:center;gap:9px;padding:8px 10px;margin:1px 6px;border-radius:var(--r);cursor:pointer;font-size:13px;color:var(--text2);border:none;background:none;width:calc(100% - 12px);text-align:left;font-family:'DM Sans',sans-serif;transition:all .12s}
+.nb:hover{background:var(--bg3);color:var(--text)}
+.nb.active{background:var(--bg3);color:var(--text);font-weight:500}
+.nb svg{width:15px;height:15px;flex-shrink:0;opacity:.7}
+.nb.active svg{opacity:1}
+.nb .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;padding:1px 6px;border-radius:20px;font-weight:600}
+.biz-chip{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:1px 6px;border-radius:var(--r);cursor:pointer;font-size:12px;color:var(--text2);transition:all .12s;border:none;background:none;width:calc(100% - 12px);text-align:left;font-family:'DM Sans',sans-serif}
+.biz-chip:hover{background:var(--bg3);color:var(--text)}
+.biz-chip.active-biz{background:var(--bg3);color:var(--text)}
+.biz-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.conn-dot{width:6px;height:6px;border-radius:50%;margin-left:auto;flex-shrink:0}
+.sidebar-footer{margin-top:auto;padding:10px 6px;border-top:1px solid var(--border)}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px}
+.page-title{font-size:15px;font-weight:600;white-space:nowrap}
+.topbar-center{flex:1;display:flex;align-items:center;gap:8px;max-width:340px}
+.search-box{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:6px 12px;font-size:13px;color:var(--text);font-family:'DM Sans',sans-serif}
+.search-box:focus{outline:none;border-color:var(--accent)}
+.search-box::placeholder{color:var(--text3)}
+.topbar-right{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.conn-banner{font-size:11px;color:var(--text3);padding:4px 10px;background:var(--bg3);border-radius:20px}
+.content{flex:1;overflow-y:auto;padding:20px;background:var(--bg)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;border:1px solid var(--border2);background:var(--bg3);color:var(--text);transition:all .12s}
+.btn:hover{background:var(--bg4)}
+.btn svg{width:14px;height:14px}
+.btn-accent{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-accent:hover{background:var(--accent2)}
+.btn-ghost{background:none;border-color:transparent;color:var(--text2)}
+.btn-ghost:hover{background:var(--bg3);color:var(--text)}
+.btn-success{background:rgba(52,199,138,.15);border-color:var(--success);color:var(--success)}
+.btn-danger{background:rgba(224,82,82,.12);border-color:var(--danger);color:var(--danger)}
+.btn-sm{padding:5px 10px;font-size:12px}
+
+/* PAGES */
+.page{display:none}.page.active{display:block}
+
+/* GRID */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.metric{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px}
+.metric-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin-bottom:6px}
+.metric-value{font-size:24px;font-weight:600;font-family:'DM Mono',monospace;letter-spacing:-1px}
+.metric-sub{font-size:11px;color:var(--text3);margin-top:3px}
+.up{color:var(--success)}.down{color:var(--danger)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:18px 20px}
+.card-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin-bottom:14px}
+.divider{height:1px;background:var(--border);margin:14px 0}
+
+/* TAGS */
+.tag{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;display:inline-flex;align-items:center}
+.tag-sale{background:rgba(52,199,138,.15);color:var(--success)}
+.tag-expense{background:rgba(224,82,82,.12);color:var(--danger)}
+.tag-scheduled{background:rgba(245,166,35,.12);color:var(--warn)}
+.tag-published{background:rgba(52,199,138,.12);color:var(--success)}
+.tag-draft{background:var(--bg3);color:var(--text3)}
+
+/* TABLE */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 12px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg3)}
+
+/* FORMS */
+.form-row{display:flex;gap:10px;margin-bottom:12px;align-items:flex-end}
+.form-group{display:flex;flex-direction:column;gap:5px;flex:1}
+.form-label{font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],select,textarea{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;font-size:13px;color:var(--text);font-family:'DM Sans',sans-serif;width:100%;transition:border-color .12s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+input::placeholder,textarea::placeholder{color:var(--text3)}
+select option{background:var(--bg3)}
+textarea{resize:vertical;min-height:90px;line-height:1.6}
+
+/* FEEDBACK */
+.feedback{border-radius:var(--r);padding:10px 14px;font-size:13px;margin-bottom:12px;display:none}
+.feedback.success{background:rgba(52,199,138,.1);border:1px solid rgba(52,199,138,.25);color:var(--success)}
+.feedback.error{background:rgba(224,82,82,.1);border:1px solid rgba(224,82,82,.25);color:var(--danger)}
+.feedback.loading{background:var(--accent-bg);border:1px solid rgba(124,109,250,.25);color:var(--accent)}
+
+/* PROGRESS */
+.prog{height:5px;background:var(--bg4);border-radius:4px;overflow:hidden;margin-top:6px}
+.prog-fill{height:100%;border-radius:4px;transition:width .4s}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r2);padding:24px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between}
+
+/* NET TOGGLES */
+.net-toggles{display:flex;gap:8px;margin-bottom:12px}
+.net-toggle{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:var(--r);border:1px solid var(--border);cursor:pointer;font-size:13px;background:var(--bg3);font-family:'DM Sans',sans-serif;color:var(--text2);transition:all .12s;font-weight:500}
+.net-toggle svg{width:15px;height:15px}
+.net-toggle.on-fb{border-color:var(--fb);color:var(--fb);background:var(--fb-bg)}
+.net-toggle.on-tg{border-color:var(--tg);color:var(--tg);background:var(--tg-bg)}
+
+/* CHART */
+.chart-bars{display:flex;align-items:flex-end;gap:6px;height:80px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.bar{width:100%;border-radius:3px 3px 0 0;min-height:4px;transition:opacity .15s}
+.bar:hover{opacity:.7}
+.bar-lbl{font-size:10px;color:var(--text3)}
+
+/* SETUP */
+.setup-step{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:18px 20px;margin-bottom:12px}
+.step-header{display:flex;align-items:center;gap:12px;cursor:pointer;margin-bottom:0}
+.step-num{width:26px;height:26px;border-radius:50%;background:var(--bg3);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--text2);flex-shrink:0}
+.step-num.done{background:rgba(52,199,138,.15);border-color:var(--success);color:var(--success)}
+.step-body{margin-top:14px;font-size:13px;color:var(--text2);line-height:1.7}
+.step-body ol{padding-left:18px}
+.step-body li{margin-bottom:7px}
+code{font-family:'DM Mono',monospace;background:var(--bg4);padding:1px 6px;border-radius:4px;font-size:12px;color:var(--accent)}
+.notice{background:rgba(245,166,35,.07);border:1px solid rgba(245,166,35,.2);border-radius:var(--r);padding:10px 14px;font-size:12px;color:#c8922a;line-height:1.6;margin-top:10px}
+
+/* CALENDAR */
+.cal-header-row{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px}
+.cal-day-name{text-align:center;font-size:10px;color:var(--text3);padding:4px 0;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-cell{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:5px;min-height:64px;cursor:pointer;transition:border-color .12s}
+.cal-cell:hover{border-color:var(--border2)}
+.cal-cell.empty{background:none;border-color:transparent;cursor:default}
+.cal-cell.today{border-color:var(--accent)}
+.cal-num{font-size:11px;color:var(--text2);text-align:right;margin-bottom:3px}
+.cal-cell.today .cal-num{color:var(--accent);font-weight:600}
+.cal-dot{font-size:9px;padding:1px 5px;border-radius:5px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.cal-dot.fb{background:var(--fb-bg);color:var(--fb)}
+.cal-dot.tg{background:var(--tg-bg);color:var(--tg)}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:4px}
+
+/* BIZ COLOR BADGE */
+.biz-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 8px;border-radius:20px}
+
+/* ADS COMPARE */
+.ad-compare-bar{display:flex;height:120px;gap:4px;align-items:flex-end;margin:10px 0}
+.ad-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.ad-bar{width:100%;border-radius:4px 4px 0 0;transition:.3s}
+.ad-bar-label{font-size:9px;color:var(--text3);text-align:center;line-height:1.3;max-width:50px;overflow:hidden;text-overflow:ellipsis}
+.ad-bar-val{font-size:10px;color:var(--text2);font-family:'DM Mono',monospace}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:40px 20px;color:var(--text3)}
+.empty-state svg{width:32px;height:32px;margin-bottom:10px;opacity:.4}
+.empty-state p{font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-biz">
+  <div class="modal">
+    <div class="modal-title">Nuevo negocio <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-biz')">✕</button></div>
+    <div class="form-group" style="margin-bottom:12px"><div class="form-label">Nombre del negocio</div><input type="text" id="biz-name" placeholder="Ej: Panadería El Sol"></div>
+    <div class="form-group" style="margin-bottom:12px"><div class="form-label">Descripción</div><input type="text" id="biz-desc" placeholder="Breve descripción..."></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Categoría</div><select id="biz-cat"><option>Retail</option><option>Servicios</option><option>Gastronomía</option><option>Tecnología</option><option>Salud</option><option>Otro</option></select></div>
+      <div class="form-group" style="max-width:80px"><div class="form-label">Color</div><input type="color" id="biz-color" value="#7c6dfa" style="height:38px;padding:2px 4px;cursor:pointer"></div>
+    </div>
+    <div class="divider"></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:600">APIs de redes sociales (opcional, se puede configurar después)</div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Telegram Bot Token</div><input type="password" id="biz-tg-token" placeholder="123456:ABCdef..."></div>
+      <div class="form-group"><div class="form-label">Chat ID</div><input type="text" id="biz-tg-chatid" placeholder="-100123..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Facebook Page Token</div><input type="password" id="biz-fb-token" placeholder="EAA..."></div>
+      <div class="form-group"><div class="form-label">Page ID</div><input type="text" id="biz-fb-pageid" placeholder="123456789"></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button class="btn" onclick="closeModal('modal-biz')">Cancelar</button>
+      <button class="btn btn-accent" onclick="saveBusiness()">Guardar negocio</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-tx">
+  <div class="modal">
+    <div class="modal-title">Registrar movimiento <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-tx')">✕</button></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Negocio</div><select id="tx-biz"></select></div>
+      <div class="form-group" style="max-width:140px"><div class="form-label">Tipo</div>
+        <select id="tx-type">
+          <option value="sale">💰 Venta</option>
+          <option value="expense">💸 Gasto</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Monto (Q)</div><input type="number" id="tx-amount" placeholder="0.00" min="0" step="0.01"></div>
+      <div class="form-group"><div class="form-label">Fecha</div><input type="date" id="tx-date"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px"><div class="form-label">Descripción</div><input type="text" id="tx-desc" placeholder="Ej: Venta de producto X..."></div>
+    <div class="form-group" style="margin-bottom:16px"><div class="form-label">Categoría</div><input type="text" id="tx-cat" placeholder="Ej: Ventas, Insumos, Marketing..."></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn" onclick="closeModal('modal-tx')">Cancelar</button>
+      <button class="btn btn-accent" onclick="saveTransaction()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-post">
+  <div class="modal">
+    <div class="modal-title">Nueva publicación <button class="btn btn-ghost btn-sm" onclick="closeModal('modal-post')">✕</button></div>
+    <div id="post-feedback" class="feedback"></div>
+    <div class="form-group" style="margin-bottom:12px"><div class="form-label">Negocio</div><select id="post-biz"></select></div>
+    <div class="form-label" style="margin-bottom:8px">Publicar en:</div>
+    <div class="net-toggles">
+      <button class="net-toggle" id="tog-fb" onclick="toggleNet('fb')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>Facebook
+      </button>
+      <button class="net-toggle" id="tog-tg" onclick="toggleNet('tg')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.2 7.4l-2.9 13.7c-.2 1-.9 1.2-1.8.8L12 18.8l-2.1 2c-.3.2-.5.4-.9.4l.3-4.3 7.7-6.9c.3-.3-.1-.4-.5-.2L5.3 16 1.6 14.8c-.8-.3-.8-.8.2-1.2L20 6.2c.7-.3 1.4.2 1.2 1.2z"/></svg>Telegram
+      </button>
+    </div>
+    <div class="form-group" style="margin-bottom:12px"><div class="form-label">Texto</div><textarea id="post-text" placeholder="Escribí tu publicación..."></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha programada</div><input type="date" id="post-date"></div>
+      <div class="form-group"><div class="form-label">Hora</div><input type="time" id="post-time" value="09:00"></div>
+      <div class="form-group"><div class="form-label">Costo pub. (Q)</div><input type="number" id="post-cost" placeholder="0" min="0"></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button class="btn" onclick="closeModal('modal-post')">Cancelar</button>
+      <button class="btn" onclick="savePost('draft')">Borrador</button>
+      <button class="btn" onclick="sendPostNow()">Enviar ahora</button>
+      <button class="btn btn-accent" onclick="savePost('scheduled')">⏰ Programar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN SHELL -->
+<div class="shell">
+  <div class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">🏢</div>
+      <div><div class="brand-name">Centro de Mando</div><div class="brand-sub" id="conn-sub">Configurando...</div></div>
+    </div>
+
+    <div class="nav-label">Navegación</div>
+    <button class="nb active" onclick="showPage('dashboard',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard
+    </button>
+    <button class="nb" onclick="showPage('businesses',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Negocios
+      <span class="badge" id="badge-biz">0</span>
+    </button>
+    <button class="nb" onclick="showPage('finance',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Finanzas
+    </button>
+    <button class="nb" onclick="showPage('social',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>Publicaciones
+      <span class="badge" id="badge-posts">0</span>
+    </button>
+    <button class="nb" onclick="showPage('ads',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Publicidades
+    </button>
+    <button class="nb" onclick="showPage('calendar',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Calendario
+    </button>
+
+    <div class="nav-label" style="margin-top:6px">Mis negocios</div>
+    <div id="biz-nav-list"></div>
+
+    <div class="sidebar-footer">
+      <button class="nb" onclick="showPage('setup',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4"/></svg>Configuración
+      </button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="page-title" id="page-label">Dashboard</div>
+      <div class="topbar-center">
+        <input class="search-box" placeholder="Buscar posts, negocios..." oninput="globalSearch(this.value)">
+      </div>
+      <div class="topbar-right">
+        <div class="conn-banner" id="conn-banner">⏳ Conectando...</div>
+        <button class="btn" onclick="openModal('modal-tx')">+ Movimiento</button>
+        <button class="btn btn-accent" onclick="openModal('modal-post')">+ Publicación</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ===== DASHBOARD ===== -->
+      <div id="page-dashboard" class="page active">
+        <div class="metrics" id="dash-metrics">
+          <div class="metric"><div class="metric-label">Ingresos totales</div><div class="metric-value up" id="d-income">Q0</div><div class="metric-sub">todas las ventas</div></div>
+          <div class="metric"><div class="metric-label">Gastos totales</div><div class="metric-value down" id="d-expenses">Q0</div><div class="metric-sub">todos los gastos</div></div>
+          <div class="metric"><div class="metric-label">Ganancia neta</div><div class="metric-value" id="d-profit">Q0</div><div class="metric-sub">ingresos − gastos</div></div>
+          <div class="metric"><div class="metric-label">Posts publicados</div><div class="metric-value" id="d-posts">0</div><div class="metric-sub">todas las redes</div></div>
+        </div>
+        <div class="two-col" style="margin-bottom:14px">
+          <div class="card">
+            <div class="card-title">Rendimiento por negocio</div>
+            <div id="dash-biz-perf">
+              <div class="empty-state"><p>Crea negocios para ver su rendimiento</p></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Últimas publicaciones</div>
+            <div id="dash-recent-posts">
+              <div class="empty-state"><p>No hay publicaciones aún</p></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Actividad reciente</div>
+          <div id="dash-activity">
+            <div class="empty-state"><p>No hay actividad todavía</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== NEGOCIOS ===== -->
+      <div id="page-businesses" class="page">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:600">Mis negocios</div>
+          <button class="btn btn-accent" onclick="openModal('modal-biz')">+ Nuevo negocio</button>
+        </div>
+        <div id="biz-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+          <div class="empty-state card"><p>No tenés negocios creados aún.<br>Hacé clic en "+ Nuevo negocio" para empezar.</p></div>
+        </div>
+      </div>
+
+      <!-- ===== FINANZAS ===== -->
+      <div id="page-finance" class="page">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:16px;font-weight:600">Finanzas</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="finance-filter-biz" onchange="renderFinance()" style="width:auto;padding:7px 12px">
+              <option value="">Todos los negocios</option>
+            </select>
+            <select id="finance-filter-type" onchange="renderFinance()" style="width:auto;padding:7px 12px">
+              <option value="">Todo</option>
+              <option value="sale">Solo ventas</option>
+              <option value="expense">Solo gastos</option>
+            </select>
+            <button class="btn btn-accent" onclick="openModal('modal-tx')">+ Registrar</button>
+          </div>
+        </div>
+        <div class="metrics" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+          <div class="metric"><div class="metric-label">Ventas</div><div class="metric-value up" id="fin-sales">Q0</div></div>
+          <div class="metric"><div class="metric-label">Gastos</div><div class="metric-value down" id="fin-exp">Q0</div></div>
+          <div class="metric"><div class="metric-label">Neto</div><div class="metric-value" id="fin-net">Q0</div></div>
+        </div>
+        <div class="two-col" style="margin-bottom:14px">
+          <div class="card">
+            <div class="card-title">Ventas por negocio</div>
+            <div id="fin-by-biz"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Actividad mensual (ventas)</div>
+            <div class="chart-bars" id="fin-chart"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Movimientos</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fecha</th><th>Negocio</th><th>Tipo</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th><th></th></tr></thead>
+              <tbody id="tx-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SOCIAL ===== -->
+      <div id="page-social" class="page">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:16px;font-weight:600">Publicaciones</div>
+          <div style="display:flex;gap:8px">
+            <select id="social-filter-biz" onchange="renderSocial()" style="width:auto;padding:7px 12px"><option value="">Todos los negocios</option></select>
+            <select id="social-filter-status" onchange="renderSocial()" style="width:auto;padding:7px 12px">
+              <option value="">Todos</option><option value="draft">Borradores</option><option value="scheduled">Programados</option><option value="published">Publicados</option>
+            </select>
+            <button class="btn btn-accent" onclick="openModal('modal-post')">+ Nueva publicación</button>
+          </div>
+        </div>
+        <div id="posts-list"></div>
+      </div>
+
+      <!-- ===== ADS ===== -->
+      <div id="page-ads" class="page">
+        <div style="font-size:16px;font-weight:600;margin-bottom:16px">Comparación de publicidades</div>
+        <div class="metrics" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+          <div class="metric"><div class="metric-label">Total invertido</div><div class="metric-value down" id="ads-total-cost">Q0</div></div>
+          <div class="metric"><div class="metric-label">Posts con costo</div><div class="metric-value" id="ads-count">0</div></div>
+          <div class="metric"><div class="metric-label">Costo promedio</div><div class="metric-value" id="ads-avg">Q0</div></div>
+        </div>
+        <div class="two-col" style="margin-bottom:14px">
+          <div class="card">
+            <div class="card-title">Inversión por negocio</div>
+            <div id="ads-by-biz"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Inversión por red social</div>
+            <div id="ads-by-net"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Detalle de publicidades (con costo)</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fecha</th><th>Negocio</th><th>Red</th><th>Texto</th><th>Estado</th><th style="text-align:right">Costo</th></tr></thead>
+              <tbody id="ads-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CALENDAR ===== -->
+      <div id="page-calendar" class="page">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <button class="btn" onclick="changeMonth(-1)">←</button>
+          <div style="font-size:16px;font-weight:600" id="cal-title"></div>
+          <button class="btn" onclick="changeMonth(1)">→</button>
+        </div>
+        <div class="cal-header-row">
+          <div class="cal-day-name">Lun</div><div class="cal-day-name">Mar</div><div class="cal-day-name">Mié</div>
+          <div class="cal-day-name">Jue</div><div class="cal-day-name">Vie</div><div class="cal-day-name">Sáb</div><div class="cal-day-name">Dom</div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+
+      <!-- ===== SETUP ===== -->
+      <div id="page-setup" class="page">
+        <div style="font-size:16px;font-weight:600;margin-bottom:16px">Configuración</div>
+        <div id="setup-feedback" class="feedback"></div>
+
+        <div class="setup-step" style="border-color:rgba(124,109,250,.3);margin-bottom:12px">
+          <div class="step-header">
+            <div class="step-num" style="background:var(--accent-bg);border-color:var(--accent);color:var(--accent)">🔗</div>
+            <div><div style="font-weight:600;font-size:14px">Conectar base de datos (PocketBase)</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Ingresá la URL de tu instancia para que los datos se guarden en la nube</div></div>
+          </div>
+          <div style="margin-top:14px">
+            <div class="form-row">
+              <div class="form-group"><div class="form-label">URL de PocketBase</div><input type="text" id="pb-url" placeholder="https://tu-app.railway.app" value=""></div>
+              <button class="btn btn-accent" style="align-self:flex-end" onclick="savePBUrl()">Conectar</button>
+            </div>
+            <div class="notice">
+              <strong>📖 Cómo desplegar PocketBase en Railway (gratis):</strong><br>
+              1. Creá cuenta en <code>railway.app</code><br>
+              2. Hacé clic en "New Project" → "Deploy from GitHub repo"<br>
+              3. Subí la carpeta <code>railway/</code> que viene en el ZIP a un repo de GitHub<br>
+              4. Railway te dará una URL como <code>https://tu-app.railway.app</code><br>
+              5. Pegá esa URL arriba y hacé clic en "Conectar"<br>
+              6. ¡Listo! Todos los datos se guardan remotamente y cualquiera con la URL puede acceder.
+            </div>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-header">
+            <div class="step-num" id="step-tg-num">1</div>
+            <div><div style="font-weight:600;font-size:14px">🤖 Telegram — cómo crear tu Bot</div><div style="font-size:12px;color:var(--text3);margin-top:2px">El token se guarda por negocio, no globalmente</div></div>
+          </div>
+          <div class="step-body">
+            <ol>
+              <li>Abrí Telegram → buscá <code>@BotFather</code></li>
+              <li>Enviá <code>/newbot</code> y seguí las instrucciones</li>
+              <li>BotFather te da un token como <code>123456:ABCdef...</code></li>
+              <li>Agregá el bot a tu canal como administrador</li>
+              <li>Para el Chat ID: mandá un msg al canal y abrí <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code></li>
+              <li>Guardá el token y Chat ID en la configuración de cada negocio</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="setup-step">
+          <div class="step-header">
+            <div class="step-num">2</div>
+            <div><div style="font-weight:600;font-size:14px">📘 Facebook — cómo obtener el token</div></div>
+          </div>
+          <div class="step-body">
+            <ol>
+              <li>Andá a <code>developers.facebook.com</code> → Crear app</li>
+              <li>Agregá el producto "Graph API"</li>
+              <li>En Graph API Explorer, pedí permisos: <code>pages_manage_posts</code></li>
+              <li>Generá el Page Access Token y copiá el Page ID</li>
+              <li>Guardá ambos en la configuración del negocio correspondiente</li>
+            </ol>
+            <div class="notice"><strong>Nota:</strong> Los tokens de prueba expiran en 1 hora. Para producción, generá un token de larga duración.</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<script>
+// ─────────────────────────────────────────────────────────
+// CONFIG & STATE
+// ─────────────────────────────────────────────────────────
+let PB_URL = localStorage.getItem('pb_url') || '';
+let businesses = [];
+let transactions = [];
+let posts = [];
+let netState = { fb: false, tg: false };
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+// ─────────────────────────────────────────────────────────
+// POCKETBASE API
+// ─────────────────────────────────────────────────────────
+async function pb(method, collection, id='', body=null, params='') {
+  if (!PB_URL) return null;
+  const url = `${PB_URL}/api/collections/${collection}/records${id?'/'+id:''}${params}`;
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(url, opts);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+async function pbList(collection, params='?perPage=500&sort=-created') {
+  const r = await pb('GET', collection, '', null, params);
+  return r ? (r.items || []) : [];
+}
+
+async function pbCreate(collection, body) { return pb('POST', collection, '', body); }
+async function pbUpdate(collection, id, body) { return pb('PATCH', collection, id, body); }
+async function pbDelete(collection, id) { return pb('DELETE', collection, id); }
+
+// ─────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────
+async function init() {
+  if (document.getElementById('pb-url')) document.getElementById('pb-url').value = PB_URL;
+  await loadAll();
+  updateConnectionBanner();
+}
+
+async function loadAll() {
+  if (PB_URL) {
+    [businesses, transactions, posts] = await Promise.all([
+      pbList('businesses'),
+      pbList('transactions'),
+      pbList('posts'),
+    ]);
+  } else {
+    // Fallback: localStorage
+    businesses = JSON.parse(localStorage.getItem('lc_biz') || '[]');
+    transactions = JSON.parse(localStorage.getItem('lc_tx') || '[]');
+    posts = JSON.parse(localStorage.getItem('lc_posts') || '[]');
+  }
+  renderAll();
+}
+
+function saveLocal() {
+  localStorage.setItem('lc_biz', JSON.stringify(businesses));
+  localStorage.setItem('lc_tx', JSON.stringify(transactions));
+  localStorage.setItem('lc_posts', JSON.stringify(posts));
+}
+
+function updateConnectionBanner() {
+  const el = document.getElementById('conn-banner');
+  const sub = document.getElementById('conn-sub');
+  if (PB_URL) {
+    el.textContent = '🟢 Conectado (remoto)';
+    el.style.color = 'var(--success)';
+    sub.textContent = 'Base de datos remota';
+  } else {
+    el.textContent = '🟡 Local (sin nube)';
+    el.style.color = 'var(--warn)';
+    sub.textContent = 'Solo local';
+  }
+}
+
+function renderAll() {
+  renderBizNav();
+  renderBizGrid();
+  renderDashboard();
+  renderFinance();
+  renderSocial();
+  renderAds();
+  renderCalendar();
+  populateSelects();
+  document.getElementById('badge-biz').textContent = businesses.length;
+  document.getElementById('badge-posts').textContent = posts.length;
+}
+
+// ─────────────────────────────────────────────────────────
+// NAV
+// ─────────────────────────────────────────────────────────
+const pageLabels = {dashboard:'Dashboard',businesses:'Negocios',finance:'Finanzas',social:'Publicaciones',ads:'Publicidades',calendar:'Calendario',setup:'Configuración'};
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  document.getElementById('page-label').textContent = pageLabels[id]||id;
+  if (id==='finance') renderFinance();
+  if (id==='social') renderSocial();
+  if (id==='ads') renderAds();
+  if (id==='dashboard') renderDashboard();
+}
+
+// ─────────────────────────────────────────────────────────
+// MODALS
+// ─────────────────────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  populateSelects();
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if (e.target===m) m.classList.remove('open'); }));
+
+// ─────────────────────────────────────────────────────────
+// BUSINESSES
+// ─────────────────────────────────────────────────────────
+async function saveBusiness() {
+  const name = document.getElementById('biz-name').value.trim();
+  if (!name) return alert('Ingresá el nombre del negocio');
+  const body = {
+    name,
+    description: document.getElementById('biz-desc').value,
+    category: document.getElementById('biz-cat').value,
+    color: document.getElementById('biz-color').value,
+    tg_token: document.getElementById('biz-tg-token').value,
+    tg_chatid: document.getElementById('biz-tg-chatid').value,
+    fb_token: document.getElementById('biz-fb-token').value,
+    fb_pageid: document.getElementById('biz-fb-pageid').value,
+  };
+  let rec;
+  if (PB_URL) rec = await pbCreate('businesses', body);
+  if (rec) {
+    businesses.push(rec);
+  } else {
+    body.id = 'local_' + Date.now();
+    businesses.push(body);
+    saveLocal();
+  }
+  closeModal('modal-biz');
+  ['biz-name','biz-desc','biz-tg-token','biz-tg-chatid','biz-fb-token','biz-fb-pageid'].forEach(id => document.getElementById(id).value='');
+  renderAll();
+}
+
+function renderBizNav() {
+  const el = document.getElementById('biz-nav-list');
+  el.innerHTML = businesses.map(b => `
+    <button class="biz-chip" onclick="filterByBiz('${b.id}')">
+      <div class="biz-dot" style="background:${b.color||'var(--accent)'}"></div>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.name}</span>
+    </button>`).join('') || '<div style="font-size:12px;color:var(--text3);padding:6px 14px">Sin negocios</div>';
+}
+
+function renderBizGrid() {
+  const el = document.getElementById('biz-grid');
+  if (!businesses.length) { el.innerHTML='<div class="empty-state card"><p>No tenés negocios creados.<br>Hacé clic en "+ Nuevo negocio".</p></div>'; return; }
+  el.innerHTML = businesses.map(b => {
+    const bizTx = transactions.filter(t => t.business_id===b.id);
+    const sales = bizTx.filter(t=>t.type==='sale').reduce((s,t)=>s+Number(t.amount),0);
+    const expenses = bizTx.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+    const bizPosts = posts.filter(p=>p.business_id===b.id).length;
+    const hasTg = !!(b.tg_token && b.tg_chatid);
+    const hasFb = !!(b.fb_token && b.fb_pageid);
+    return `<div class="card" style="border-top:3px solid ${b.color||'var(--accent)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div style="font-size:15px;font-weight:600">${b.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${b.category||''} ${b.description?'· '+b.description:''}</div>
+        </div>
+        <div style="display:flex;gap:4px">
+          ${hasTg?'<span style="font-size:10px;color:var(--tg);background:var(--tg-bg);padding:2px 7px;border-radius:20px">TG</span>':''}
+          ${hasFb?'<span style="font-size:10px;color:var(--fb);background:var(--fb-bg);padding:2px 7px;border-radius:20px">FB</span>':''}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--bg3);border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Ventas</div>
+          <div style="font-size:14px;font-weight:600;color:var(--success);font-family:'DM Mono',monospace">Q${fmt(sales)}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Gastos</div>
+          <div style="font-size:14px;font-weight:600;color:var(--danger);font-family:'DM Mono',monospace">Q${fmt(expenses)}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">Posts</div>
+          <div style="font-size:14px;font-weight:600;font-family:'DM Mono',monospace">${bizPosts}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" style="flex:1;justify-content:center" onclick="filterByBiz('${b.id}');showPage('finance',null)">Ver finanzas</button>
+        <button class="btn btn-sm btn-accent" style="flex:1;justify-content:center" onclick="filterByBiz('${b.id}');showPage('social',null)">Ver posts</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteBiz('${b.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function deleteBiz(id) {
+  if (!confirm('¿Eliminar este negocio y todos sus datos?')) return;
+  if (PB_URL) await pbDelete('businesses', id);
+  businesses = businesses.filter(b=>b.id!==id);
+  transactions = transactions.filter(t=>t.business_id!==id);
+  posts = posts.filter(p=>p.business_id!==id);
+  saveLocal();
+  renderAll();
+}
+
+function filterByBiz(id) {
+  const sel1 = document.getElementById('finance-filter-biz');
+  const sel2 = document.getElementById('social-filter-biz');
+  if (sel1) sel1.value = id;
+  if (sel2) sel2.value = id;
+}
+
+// ─────────────────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────────────────
+function renderDashboard() {
+  const income = transactions.filter(t=>t.type==='sale').reduce((s,t)=>s+Number(t.amount),0);
+  const exp = transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+  const profit = income - exp;
+  document.getElementById('d-income').textContent = 'Q'+fmt(income);
+  document.getElementById('d-expenses').textContent = 'Q'+fmt(exp);
+  const dp = document.getElementById('d-profit');
+  dp.textContent = 'Q'+fmt(profit);
+  dp.className = 'metric-value ' + (profit>=0?'up':'down');
+  document.getElementById('d-posts').textContent = posts.filter(p=>p.status==='published').length;
+
+  // Biz performance
+  const bp = document.getElementById('dash-biz-perf');
+  if (!businesses.length) { bp.innerHTML='<div class="empty-state"><p>Crea negocios para ver rendimiento</p></div>'; }
+  else {
+    bp.innerHTML = businesses.map(b => {
+      const s = transactions.filter(t=>t.business_id===b.id&&t.type==='sale').reduce((a,t)=>a+Number(t.amount),0);
+      const e = transactions.filter(t=>t.business_id===b.id&&t.type==='expense').reduce((a,t)=>a+Number(t.amount),0);
+      const net = s-e;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div class="biz-dot" style="background:${b.color||'var(--accent)'}"></div>
+        <div style="flex:1;font-size:13px">${b.name}</div>
+        <div style="font-size:12px;color:var(--success);font-family:'DM Mono',monospace">+Q${fmt(s)}</div>
+        <div style="font-size:12px;color:var(--danger);font-family:'DM Mono',monospace">-Q${fmt(e)}</div>
+        <div style="font-size:13px;font-weight:600;color:${net>=0?'var(--success)':'var(--danger)'};font-family:'DM Mono',monospace">Q${fmt(net)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Recent posts
+  const rp = document.getElementById('dash-recent-posts');
+  const recent = posts.slice().sort((a,b)=>b.created>a.created?1:-1).slice(0,5);
+  if (!recent.length) { rp.innerHTML='<div class="empty-state"><p>No hay publicaciones</p></div>'; }
+  else rp.innerHTML = recent.map(p => {
+    const biz = businesses.find(b=>b.id===p.business_id);
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:flex-start">
+      <span class="tag tag-${p.status}">${{draft:'Borrador',scheduled:'Prog.',published:'Pub.'}[p.status]||p.status}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.text}</div>
+        ${biz?`<div style="font-size:10px;color:var(--text3)">${biz.name}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Activity
+  const act = document.getElementById('dash-activity');
+  const all = [
+    ...transactions.map(t=>({...t,_type:'tx',_date:t.date||t.created})),
+    ...posts.map(p=>({...p,_type:'post',_date:p.scheduled_date||p.created}))
+  ].sort((a,b)=>b._date>a._date?1:-1).slice(0,10);
+  if (!all.length) { act.innerHTML='<div class="empty-state"><p>Sin actividad</p></div>'; }
+  else act.innerHTML='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Negocio</th><th>Detalle</th><th style="text-align:right">Monto/Red</th></tr></thead><tbody>'+
+    all.map(item=>{
+      const biz = businesses.find(b=>b.id===item.business_id);
+      if (item._type==='tx') return `<tr><td>${item.date||''}</td><td><span class="tag tag-${item.type}">${item.type==='sale'?'Venta':'Gasto'}</span></td><td>${biz?biz.name:'-'}</td><td>${item.description||''}</td><td style="text-align:right;color:${item.type==='sale'?'var(--success)':'var(--danger)'};font-family:'DM Mono',monospace">${item.type==='sale'?'+':'-'}Q${fmt(Number(item.amount))}</td></tr>`;
+      return `<tr><td>${item.scheduled_date||''}</td><td><span class="tag tag-${item.status}">${item.status}</span></td><td>${biz?biz.name:'-'}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.text}</td><td style="text-align:right;color:${item.network==='tg'?'var(--tg)':'var(--fb)'}">${item.network?.toUpperCase()||''}</td></tr>`;
+    }).join('')+'</tbody></table></div>';
+}
+
+// ─────────────────────────────────────────────────────────
+// FINANCE
+// ─────────────────────────────────────────────────────────
+function renderFinance() {
+  const bizF = document.getElementById('finance-filter-biz')?.value||'';
+  const typeF = document.getElementById('finance-filter-type')?.value||'';
+  let txs = transactions;
+  if (bizF) txs = txs.filter(t=>t.business_id===bizF);
+  if (typeF) txs = txs.filter(t=>t.type===typeF);
+
+  const sales = txs.filter(t=>t.type==='sale').reduce((s,t)=>s+Number(t.amount),0);
+  const exp = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+  const net = sales-exp;
+  document.getElementById('fin-sales').textContent='Q'+fmt(sales);
+  document.getElementById('fin-exp').textContent='Q'+fmt(exp);
+  const fn = document.getElementById('fin-net');
+  fn.textContent='Q'+fmt(net); fn.className='metric-value '+(net>=0?'up':'down');
+
+  // By biz
+  const fbb = document.getElementById('fin-by-biz');
+  fbb.innerHTML = businesses.map(b=>{
+    const bSales = transactions.filter(t=>t.business_id===b.id&&t.type==='sale').reduce((s,t)=>s+Number(t.amount),0);
+    const totalSales = transactions.filter(t=>t.type==='sale').reduce((s,t)=>s+Number(t.amount),0)||1;
+    const pct = Math.round(bSales/totalSales*100);
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <span style="display:flex;align-items:center;gap:6px"><span class="biz-dot" style="background:${b.color||'var(--accent)'}"></span>${b.name}</span>
+        <span style="font-family:'DM Mono',monospace;color:var(--success)">Q${fmt(bSales)}</span>
+      </div>
+      <div class="prog"><div class="prog-fill" style="width:${pct}%;background:${b.color||'var(--accent)'}"></div></div>
+    </div>`;
+  }).join('') || '<div class="empty-state"><p>Sin datos</p></div>';
+
+  // Monthly chart (last 6 months)
+  const fc = document.getElementById('fin-chart');
+  const now = new Date();
+  const months = [];
+  for (let i=5;i>=0;i--) { const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({label:MONTHS[d.getMonth()].slice(0,3),year:d.getFullYear(),month:d.getMonth()}); }
+  const maxVal = Math.max(...months.map(m=>transactions.filter(t=>t.type==='sale'&&t.date&&new Date(t.date).getMonth()===m.month&&new Date(t.date).getFullYear()===m.year).reduce((s,t)=>s+Number(t.amount),0)),1);
+  fc.innerHTML = months.map(m=>{
+    const val = transactions.filter(t=>t.type==='sale'&&t.date&&new Date(t.date).getMonth()===m.month&&new Date(t.date).getFullYear()===m.year).reduce((s,t)=>s+Number(t.amount),0);
+    const h = Math.max(Math.round(val/maxVal*100),4);
+    return `<div class="bar-col"><div class="bar" style="height:${h}%;background:var(--success)"></div><div class="bar-lbl">${m.label}</div></div>`;
+  }).join('');
+
+  // Table
+  const tbody = document.getElementById('tx-table');
+  tbody.innerHTML = txs.slice().sort((a,b)=>b.date>a.date?1:-1).map(t=>{
+    const biz = businesses.find(b=>b.id===t.business_id);
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${t.date||'-'}</td>
+      <td>${biz?`<span class="biz-badge" style="background:${biz.color||'var(--accent)'}22;color:${biz.color||'var(--accent)'}">${biz.name}</span>`:'-'}</td>
+      <td><span class="tag tag-${t.type}">${t.type==='sale'?'Venta':'Gasto'}</span></td>
+      <td>${t.description||'-'}</td>
+      <td style="color:var(--text3)">${t.category||'-'}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:${t.type==='sale'?'var(--success)':'var(--danger)'}">${t.type==='sale'?'+':'-'}Q${fmt(Number(t.amount))}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="deleteTx('${t.id}')">✕</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">Sin movimientos</td></tr>';
+}
+
+// ─────────────────────────────────────────────────────────
+// TRANSACTIONS
+// ─────────────────────────────────────────────────────────
+async function saveTransaction() {
+  const bizId = document.getElementById('tx-biz').value;
+  const type = document.getElementById('tx-type').value;
+  const amount = parseFloat(document.getElementById('tx-amount').value);
+  if (!bizId||!type||isNaN(amount)||amount<=0) return alert('Completá todos los campos correctamente');
+  const body = { business_id:bizId, type, amount, description:document.getElementById('tx-desc').value, category:document.getElementById('tx-cat').value, date:document.getElementById('tx-date').value };
+  let rec;
+  if (PB_URL) rec = await pbCreate('transactions', body);
+  if (rec) transactions.push(rec);
+  else { body.id='local_'+Date.now(); transactions.push(body); saveLocal(); }
+  closeModal('modal-tx');
+  ['tx-amount','tx-desc','tx-cat'].forEach(id=>document.getElementById(id).value='');
+  renderAll();
+}
+
+async function deleteTx(id) {
+  if (!confirm('¿Eliminar este movimiento?')) return;
+  if (PB_URL) await pbDelete('transactions', id);
+  transactions = transactions.filter(t=>t.id!==id);
+  saveLocal(); renderAll();
+}
+
+// ─────────────────────────────────────────────────────────
+// SOCIAL / POSTS
+// ─────────────────────────────────────────────────────────
+function toggleNet(n) {
+  netState[n]=!netState[n];
+  document.getElementById('tog-'+n).className='net-toggle'+(netState[n]?' on-'+n:'');
+}
+
+async function savePost(status) {
+  const text = document.getElementById('post-text').value.trim();
+  const bizId = document.getElementById('post-biz').value;
+  const nets = Object.keys(netState).filter(k=>netState[k]);
+  if (!text) return showFeedback2('post-feedback','⚠️ Escribí el texto','error');
+  if (!nets.length) return showFeedback2('post-feedback','⚠️ Seleccioná al menos una red','error');
+
+  for (const net of nets) {
+    const body = { business_id:bizId, network:net, text, status, scheduled_date:document.getElementById('post-date').value, scheduled_time:document.getElementById('post-time').value, cost:parseFloat(document.getElementById('post-cost').value)||0 };
+    let rec;
+    if (PB_URL) rec = await pbCreate('posts', body);
+    if (rec) posts.push(rec);
+    else { body.id='local_'+Date.now(); posts.push(body); saveLocal(); }
+  }
+  closeModal('modal-post');
+  document.getElementById('post-text').value='';
+  document.getElementById('post-cost').value='';
+  netState={fb:false,tg:false};
+  ['fb','tg'].forEach(n=>document.getElementById('tog-'+n).className='net-toggle');
+  renderAll();
+}
+
+async function sendPostNow() {
+  const text = document.getElementById('post-text').value.trim();
+  const bizId = document.getElementById('post-biz').value;
+  const biz = businesses.find(b=>b.id===bizId);
+  const nets = Object.keys(netState).filter(k=>netState[k]);
+  if (!text||!nets.length) return showFeedback2('post-feedback','⚠️ Completá texto y seleccioná una red','error');
+  showFeedback2('post-feedback','⏳ Enviando...','loading');
+  let results=[];
+  for (const net of nets) {
+    if (net==='tg'&&biz?.tg_token&&biz?.tg_chatid) {
+      const r = await sendTG(biz.tg_token, biz.tg_chatid, text);
+      results.push('TG: '+(r.ok?'✅':'❌ '+(r.description||'Error')));
+      if (r.ok) { const body={business_id:bizId,network:'tg',text,status:'published',scheduled_date:today(),cost:parseFloat(document.getElementById('post-cost').value)||0}; let rec=PB_URL?await pbCreate('posts',body):null; posts.push(rec||{...body,id:'local_'+Date.now()}); saveLocal(); }
+    } else if (net==='fb'&&biz?.fb_token&&biz?.fb_pageid) {
+      const r = await sendFB(biz.fb_token, biz.fb_pageid, text);
+      results.push('FB: '+r.msg);
+      if (r.ok) { const body={business_id:bizId,network:'fb',text,status:'published',scheduled_date:today(),cost:parseFloat(document.getElementById('post-cost').value)||0}; let rec=PB_URL?await pbCreate('posts',body):null; posts.push(rec||{...body,id:'local_'+Date.now()}); saveLocal(); }
+    } else { results.push(net.toUpperCase()+': ❌ Configurá el token en el negocio'); }
+  }
+  showFeedback2('post-feedback',results.join(' | '),results.every(r=>r.includes('✅'))?'success':'error');
+  renderAll();
+}
+
+async function sendTG(token, chatid, text) {
+  try { const r=await fetch(`https://api.telegram.org/bot${token}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatid,text,parse_mode:'HTML'})}); return await r.json(); }
+  catch(e){ return {ok:false,description:e.message}; }
+}
+
+async function sendFB(token, pageid, text) {
+  try { const r=await fetch(`https://graph.facebook.com/${pageid}/feed`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,access_token:token})}); const d=await r.json(); return d.id?{ok:true,msg:'✅ Publicado'}:{ok:false,msg:'❌ '+(d.error?.message||'Error')}; }
+  catch(e){ return {ok:false,msg:'❌ '+e.message}; }
+}
+
+async function deletePost(id) {
+  if (!confirm('¿Eliminar esta publicación?')) return;
+  if (PB_URL) await pbDelete('posts', id);
+  posts = posts.filter(p=>p.id!==id);
+  saveLocal(); renderAll();
+}
+
+function renderSocial() {
+  const bizF = document.getElementById('social-filter-biz')?.value||'';
+  const statusF = document.getElementById('social-filter-status')?.value||'';
+  let ps = posts;
+  if (bizF) ps=ps.filter(p=>p.business_id===bizF);
+  if (statusF) ps=ps.filter(p=>p.status===statusF);
+  const el = document.getElementById('posts-list');
+  if (!ps.length) { el.innerHTML='<div class="empty-state card"><p>No hay publicaciones aquí</p></div>'; return; }
+  el.innerHTML = ps.slice().sort((a,b)=>b.created>a.created?1:-1).map(p=>{
+    const biz=businesses.find(b=>b.id===p.business_id);
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">
+      <div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:${p.network==='fb'?'var(--fb-bg)':'var(--tg-bg)'};font-size:14px">${p.network==='fb'?'📘':'💬'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;margin-bottom:6px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.text}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="tag tag-${p.status}">${{draft:'Borrador',scheduled:'Programado',published:'Publicado'}[p.status]||p.status}</span>
+          ${biz?`<span class="biz-badge" style="background:${biz.color||'var(--accent)'}22;color:${biz.color||'var(--accent)'}">${biz.name}</span>`:''}
+          ${p.scheduled_date?`<span style="font-size:11px;color:var(--text3)">📅 ${p.scheduled_date} ${p.scheduled_time||''}</span>`:''}
+          ${p.cost?`<span style="font-size:11px;color:var(--warn)">💰 Q${fmt(Number(p.cost))}</span>`:''}
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="deletePost('${p.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────
+// ADS
+// ─────────────────────────────────────────────────────────
+function renderAds() {
+  const adPosts = posts.filter(p=>p.cost&&Number(p.cost)>0);
+  const totalCost = adPosts.reduce((s,p)=>s+Number(p.cost),0);
+  document.getElementById('ads-total-cost').textContent='Q'+fmt(totalCost);
+  document.getElementById('ads-count').textContent=adPosts.length;
+  document.getElementById('ads-avg').textContent=adPosts.length?'Q'+fmt(totalCost/adPosts.length):'Q0';
+
+  // By biz
+  const abb = document.getElementById('ads-by-biz');
+  abb.innerHTML = businesses.map(b=>{
+    const cost = adPosts.filter(p=>p.business_id===b.id).reduce((s,p)=>s+Number(p.cost),0);
+    const pct = totalCost?Math.round(cost/totalCost*100):0;
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <span style="display:flex;align-items:center;gap:6px"><span class="biz-dot" style="background:${b.color||'var(--accent)'}"></span>${b.name}</span>
+        <span style="font-family:'DM Mono',monospace;color:var(--warn)">Q${fmt(cost)}</span>
+      </div>
+      <div class="prog"><div class="prog-fill" style="width:${pct}%;background:${b.color||'var(--accent)'}"></div></div>
+    </div>`;
+  }).join('') || '<div class="empty-state"><p>Sin datos</p></div>';
+
+  // By network
+  const abn = document.getElementById('ads-by-net');
+  const fbCost = adPosts.filter(p=>p.network==='fb').reduce((s,p)=>s+Number(p.cost),0);
+  const tgCost = adPosts.filter(p=>p.network==='tg').reduce((s,p)=>s+Number(p.cost),0);
+  const maxNet = Math.max(fbCost,tgCost,1);
+  abn.innerHTML = `
+    <div class="ad-compare-bar">
+      <div class="ad-bar-wrap"><div class="ad-bar" style="height:${Math.round(fbCost/maxNet*100)}%;background:var(--fb)"></div><div class="ad-bar-val">Q${fmt(fbCost)}</div><div class="ad-bar-label">Facebook</div></div>
+      <div class="ad-bar-wrap"><div class="ad-bar" style="height:${Math.round(tgCost/maxNet*100)}%;background:var(--tg)"></div><div class="ad-bar-val">Q${fmt(tgCost)}</div><div class="ad-bar-label">Telegram</div></div>
+    </div>`;
+
+  // Table
+  const at = document.getElementById('ads-table');
+  at.innerHTML = adPosts.sort((a,b)=>b.scheduled_date>a.scheduled_date?1:-1).map(p=>{
+    const biz=businesses.find(b=>b.id===p.business_id);
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${p.scheduled_date||'-'}</td>
+      <td>${biz?`<span class="biz-badge" style="background:${biz.color||'var(--accent)'}22;color:${biz.color||'var(--accent)'}">${biz.name}</span>`:'-'}</td>
+      <td style="color:${p.network==='fb'?'var(--fb)':'var(--tg)'}">${p.network?.toUpperCase()||''}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${p.text}</td>
+      <td><span class="tag tag-${p.status}">${p.status}</span></td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--warn)">Q${fmt(Number(p.cost))}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Sin publicidades con costo registrado</td></tr>';
+}
+
+// ─────────────────────────────────────────────────────────
+// CALENDAR
+// ─────────────────────────────────────────────────────────
+function changeMonth(d) { calMonth+=d; if(calMonth>11){calMonth=0;calYear++;} if(calMonth<0){calMonth=11;calYear--;} renderCalendar(); }
+
+function renderCalendar() {
+  document.getElementById('cal-title').textContent = MONTHS[calMonth]+' '+calYear;
+  const firstDay = new Date(calYear,calMonth,1).getDay();
+  const offset = (firstDay+6)%7;
+  const days = new Date(calYear,calMonth+1,0).getDate();
+  const todayStr = today();
+  let html='';
+  for(let i=0;i<offset;i++) html+='<div class="cal-cell empty"></div>';
+  for(let d=1;d<=days;d++){
+    const ds=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const dp=posts.filter(p=>p.scheduled_date===ds);
+    html+=`<div class="cal-cell${ds===todayStr?' today':''}">
+      <div class="cal-num">${d}</div>
+      ${dp.map(p=>`<div class="cal-dot ${p.network}">${p.network?.toUpperCase()}</div>`).join('')}
+    </div>`;
+  }
+  document.getElementById('cal-grid').innerHTML=html;
+}
+
+// ─────────────────────────────────────────────────────────
+// SETUP
+// ─────────────────────────────────────────────────────────
+async function savePBUrl() {
+  const url = document.getElementById('pb-url').value.trim().replace(/\/$/,'');
+  if (!url) return;
+  PB_URL = url;
+  localStorage.setItem('pb_url', url);
+  showFeedback2('setup-feedback','⏳ Conectando a la base de datos...','loading');
+  await loadAll();
+  updateConnectionBanner();
+  showFeedback2('setup-feedback','✅ Conectado correctamente. Los datos se guardan en la nube.','success');
+}
+
+// ─────────────────────────────────────────────────────────
+// SELECTS & UTILITIES
+// ─────────────────────────────────────────────────────────
+function populateSelects() {
+  const opts = '<option value="">Sin asignar</option>'+businesses.map(b=>`<option value="${b.id}">${b.name}</option>`).join('');
+  ['tx-biz','post-biz','finance-filter-biz','social-filter-biz'].forEach(id=>{
+    const el=document.getElementById(id); if(el){const v=el.value; el.innerHTML=(id.includes('filter')?'<option value="">Todos los negocios</option>':opts.replace('<option value="">Sin asignar</option>','')); if(!id.includes('filter'))el.innerHTML=opts; el.value=v;}
+  });
+  document.getElementById('tx-date').value=document.getElementById('tx-date').value||today();
+  document.getElementById('post-date').value=document.getElementById('post-date').value||today();
+}
+
+function globalSearch(q) {
+  if (!q) return;
+  // Future: implement search overlay
+}
+
+function showFeedback2(id, msg, type) {
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.textContent=msg; el.className='feedback '+type; el.style.display='block';
+  if(type!=='loading') setTimeout(()=>el.style.display='none',4000);
+}
+
+function today() { return new Date().toISOString().split('T')[0]; }
+function fmt(n) { return isNaN(n)?'0':Number(n).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// ─────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
