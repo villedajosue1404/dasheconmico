@@ -47,8 +47,22 @@ async function initDB() {
         clicks INTEGER DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS scheduled_posts (
+        id SERIAL PRIMARY KEY,
+        content TEXT NOT NULL,
+        photo_url TEXT,
+        networks TEXT NOT NULL DEFAULT 'tg',
+        days TEXT NOT NULL DEFAULT 'mon,tue,wed,thu,fri,sat,sun',
+        times TEXT NOT NULL,
+        business_id INTEGER REFERENCES businesses(id) ON DELETE SET NULL,
+        active BOOLEAN DEFAULT TRUE,
+        created_by TEXT,
+        last_sent TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
-    console.log('✅ Base de datos inicializada');
+    console.log('Base de datos inicializada');
   } finally {
     client.release();
   }
