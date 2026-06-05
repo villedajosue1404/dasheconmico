@@ -1003,7 +1003,7 @@ async function saveApiConfig(net) {
 async function testApi(net) {
   showFb('setup-fb', '⏳ Probando conexión...', 'load');
   // Create a temp test post and publish
-  const testPost = await api('/api/posts', { method:'POST', body: { network: net, content: '🤖 Mensaje de prueba desde Centro de Mando. Conexión exitosa ✅', status: 'draft' } });
+  const testPost = await api('/api/posts', { method:'POST', body: { network: net, content: 'Mensaje de prueba desde Centro de Mando. Conexion exitosa', status: 'draft' } });
   if (!testPost.ok) return showFb('setup-fb', '❌ ' + testPost.error, 'err');
   const pub = await api('/api/posts/' + testPost.post.id + '/publish', { method:'POST' });
   showFb('setup-fb', pub.ok ? '✅ ' + pub.message : '❌ ' + (pub.message||pub.error), pub.ok?'ok':'err');
