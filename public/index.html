@@ -936,7 +936,7 @@ async function loadComparison() {
   document.getElementById('comp-reach').innerHTML = posts.length
     ? posts.slice(0,5).map((p,i) => `
       <div class="comp-row">
-        <div class="comp-rank ${i===0?'gold'':''}">${i+1}</div>
+        <div class="comp-rank ${i===0?'gold':''}">${i+1}</div>
         <div class="comp-body">
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:2px">
             <span>${p.network==='fb'?'📘':'💬'}</span>
