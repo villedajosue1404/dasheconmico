@@ -23,7 +23,6 @@ function similarity(a, b) {
   b = b.toLowerCase().trim();
   if (a === b) return 1;
   if (b.includes(a) || a.includes(b)) return 0.9;
-  // Count matching chars
   let matches = 0;
   const shorter = a.length < b.length ? a : b;
   const longer = a.length < b.length ? b : a;
@@ -34,135 +33,146 @@ function similarity(a, b) {
 }
 
 function findBestBusiness(input, businesses) {
-  if (!businesses.length) return null;
-  let best = null;
-  let bestScore = 0;
+  if (!businesses.length || !input) return null;
+  let best = null, bestScore = 0;
   for (const b of businesses) {
     const score = similarity(input, b.name);
-    if (score > bestScore) {
-      bestScore = score;
-      best = b;
-    }
+    if (score > bestScore) { bestScore = score; best = b; }
   }
   return bestScore > 0.3 ? { business: best, score: bestScore } : null;
 }
 
-// ============ NLP — entender el mensaje ============
+// ============ PARSER PRINCIPAL ============
 function parseMessage(text) {
   const t = text.toLowerCase().trim();
 
   // Comandos especiales
-  if (/^\/?(balance|saldo|resumen|cuanto|cuánto)/.test(t)) return { type: 'balance' };
-  if (/^\/?ayuda|^\/help/.test(t)) return { type: 'help' };
-  if (/^\/?negocios/.test(t)) return { type: 'list_businesses' };
-  if (/^\/?nuevo negocio (.+)/.test(t)) {
-    const m = t.match(/^\/?nuevo negocio (.+)/);
-    return { type: 'new_business', name: m[1].trim() };
+  if (/^\\/?(balance|saldo|resumen|cuanto|cuánto)/.test(t)) return { type: 'balance' };
+  if (/^\\/?ayuda|^\\/help/.test(t)) return { type: 'help' };
+  if (/^\\/?negocios/.test(t)) return { type: 'list_businesses' };
+  if (/^\\/?inventario/.test(t)) return { type: 'inventory' };
+
+  const newBizMatch = t.match(/^\\/?(nuevo negocio|crear negocio|abrir negocio)\s+(.+)/i);
+  if (newBizMatch) return { type: 'new_business', name: newBizMatch[2].trim() };
+
+  // ============ FORMATO CON CANTIDAD Y PRECIO UNITARIO ============
+  // Ejemplos: "10 tacos a Q15", "vendí 5 pupusas a 20", "3 kg de carne a Q50"
+  const qtyPriceMatch = t.match(/(\d+(?:[.,]\d+)?)\s+([a-záéíóúñ\s]{2,30?})\s+a\s+[qQ]?\s*(\d+(?:[.,]\d{1,2})?)/i);
+  if (qtyPriceMatch) {
+    const qty = parseFloat(qtyPriceMatch[1]);
+    const item = qtyPriceMatch[2].trim().replace(/\b(de|kg|unidades|unidad|piezas)\b/gi, '').trim();
+    const unitPrice = parseFloat(qtyPriceMatch[3].replace(',', '.'));
+    const total = qty * unitPrice;
+    const isExpense = /gast|compr|pagu|insum|ingredient|mater/i.test(t);
+    return {
+      type: isExpense ? 'expense' : 'income',
+      amount: total,
+      qty,
+      unitPrice,
+      item,
+      description: `${qty} ${item} a Q${unitPrice.toFixed(2)} c/u`,
+      bizHint: extractBizHint(t)
+    };
   }
 
-  // Detectar tipo: ingreso o gasto
-  const isIncome = /vend|ingres|cobr|entr[oó]|ganancia|venta|pag[oó]|recibi|cobr|factur/i.test(t);
-  const isExpense = /gast|pagu[eé]|compr|egrés|salid|perd|invert|rent|sueldo|pag[oué] (a|por|de)/i.test(t);
+  // ============ FORMATO NORMAL ============
+  const isIncome = /vend|ingres|cobr|entr[oó]|ganancia|venta|recibi|factur|vendi|ganamos|gan[eé]|cobr/i.test(t);
+  const isExpense = /gast|pagu[eé]|compr|egres|salid|perd|invert|rent|sueldo|pagamos|compramos|gast[eé]/i.test(t);
+  const hasNumber = /\d/.test(t);
 
-  if (!isIncome && !isExpense) return { type: 'unknown' };
+  if (!isIncome && !isExpense && !hasNumber) return { type: 'unknown' };
 
-  // Extraer monto — buscar números con o sin Q/q/quetzales
-  const amountMatch = t.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:q|quetzales|gtq)?/i) ||
-                      t.match(/q\s*(\d+(?:[.,]\d{1,2})?)/i);
+  // Extraer monto
+  const amountMatch =
+    t.match(/q\s*(\d+(?:[.,]\d{1,2})?)/i) ||
+    t.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:q|quetzales|gtq)\b/i) ||
+    t.match(/(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)/i) ||
+    t.match(/(\d+(?:[.,]\d{1,2})?)/i);
+
   if (!amountMatch) return { type: 'no_amount' };
-  const amount = parseFloat(amountMatch[1].replace(',', '.'));
+  const amount = parseFloat(amountMatch[1].replace(/,(\d{3})/g, '$1').replace(',', '.'));
+  const finalType = isExpense && !isIncome ? 'expense' : 'income';
 
-  // Extraer descripción — todo lo que no sea el monto y palabras clave de tipo
   let description = t
+    .replace(/q\s*\d+(?:[.,]\d{1,2})?/gi, '')
     .replace(/\d+(?:[.,]\d{1,2})?\s*(?:q|quetzales|gtq)?/gi, '')
-    .replace(/se\s+vendieron?|se\s+gast[oó]|gast[eé]|pagu[eé]|cobr[eé]|ingres[oó]|venta\s+de|compra\s+de|pago\s+de|gasto\s+en|gasto\s+de/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/se\s+vendieron?|se\s+gast[oó]|gast[eé]|pagu[eé]|cobr[eé]|ingres[oó]|venta\s+de|compra\s+de|pago\s+de|gasto\s+en|gasto\s+de|vendimos|vendí|gané|ganamos|compramos|pagamos/gi, '')
+    .replace(/\b(por|de|en|el|la|los|las|un|una)\b/gi, ' ')
+    .replace(/\s+/g, ' ').trim();
 
-  // Intentar extraer negocio del mensaje
-  // Busca patrones como "de [negocio]", "en [negocio]", "para [negocio]"
-  const bizMatch = t.match(/(?:de|en|para|del|negocio)\s+([a-záéíóúñ\s]+?)(?:\s+por|\s+de|\s+\d|$)/i);
-  const bizHint = bizMatch ? bizMatch[1].trim() : null;
+  if (!description) description = finalType === 'income' ? 'Ingreso' : 'Gasto';
 
   return {
-    type: isIncome ? 'income' : 'expense',
+    type: finalType,
     amount,
-    description: description || (isIncome ? 'Ingreso' : 'Gasto'),
-    bizHint
+    description,
+    bizHint: extractBizHint(t)
   };
 }
 
-// ============ ESTADOS DE CONVERSACIÓN ============
-const sessions = {}; // chatId -> estado pendiente
+function extractBizHint(t) {
+  const m = t.match(/(?:de|en|para|del|negocio|local)\s+([a-záéíóúñ\s]{2,30}?)(?:\s+por|\s+a\s|\s+\d|,|$)/i);
+  return m ? m[1].trim() : null;
+}
+
+// ============ SESIONES ============
+const sessions = {};
 
 // ============ HANDLER PRINCIPAL ============
 async function handleMessage(msg) {
   const chatId = msg.chat.id;
   const text = (msg.text || '').trim();
   const userName = msg.from?.first_name || 'equipo';
-
   if (!text) return;
 
-  // ¿Hay una sesión pendiente? (esperando respuesta del usuario)
-  if (sessions[chatId]) {
-    await handleSession(chatId, text, userName);
-    return;
-  }
+  if (sessions[chatId]) { await handleSession(chatId, text, userName); return; }
 
   const parsed = parseMessage(text);
 
   // BALANCE
   if (parsed.type === 'balance') {
     const r = await pool.query(`
-      SELECT b.name, b.color,
+      SELECT b.name,
         COALESCE(SUM(CASE WHEN t.type='income' THEN t.amount ELSE 0 END),0) as income,
         COALESCE(SUM(CASE WHEN t.type='expense' THEN t.amount ELSE 0 END),0) as expense,
         COALESCE(SUM(CASE WHEN t.type='income' THEN t.amount ELSE -t.amount END),0) as balance
       FROM businesses b
       LEFT JOIN transactions t ON t.business_id=b.id
-      GROUP BY b.id, b.name, b.color
-      ORDER BY balance DESC
+      GROUP BY b.id, b.name ORDER BY balance DESC
     `);
-    if (!r.rows.length) {
-      await tgSend(chatId, '📊 No hay negocios registrados todavía.\n\nUsá <b>/nuevo negocio [nombre]</b> para crear uno.');
-      return;
-    }
-    let msg2 = '📊 <b>Balance general</b>\n\n';
-    let totalIncome = 0, totalExpense = 0;
+    if (!r.rows.length) { await tgSend(chatId, '📊 No hay negocios. Creá uno con /nuevo negocio [nombre]'); return; }
+    let reply = '📊 <b>Balance general</b>\n\n';
+    let ti = 0, te = 0;
     for (const b of r.rows) {
       const bal = parseFloat(b.balance);
-      const icon = bal >= 0 ? '📈' : '📉';
-      msg2 += `${icon} <b>${b.name}</b>\n`;
-      msg2 += `   ✅ Ingresos: Q ${parseFloat(b.income).toFixed(2)}\n`;
-      msg2 += `   ❌ Gastos: Q ${parseFloat(b.expense).toFixed(2)}\n`;
-      msg2 += `   💰 Balance: Q ${bal.toFixed(2)}\n\n`;
-      totalIncome += parseFloat(b.income);
-      totalExpense += parseFloat(b.expense);
+      reply += `${bal >= 0 ? '📈' : '📉'} <b>${b.name}</b>\n`;
+      reply += `   ✅ Q ${parseFloat(b.income).toFixed(2)}  ❌ Q ${parseFloat(b.expense).toFixed(2)}\n`;
+      reply += `   💰 Balance: <b>Q ${bal.toFixed(2)}</b>\n\n`;
+      ti += parseFloat(b.income); te += parseFloat(b.expense);
     }
-    const totalBal = totalIncome - totalExpense;
-    msg2 += `─────────────────\n`;
-    msg2 += `💼 <b>TOTAL</b>\n`;
-    msg2 += `✅ Q ${totalIncome.toFixed(2)} | ❌ Q ${totalExpense.toFixed(2)}\n`;
-    msg2 += `💰 Balance neto: <b>Q ${totalBal.toFixed(2)}</b>`;
-    await tgSend(chatId, msg2);
+    reply += `─────────────────\n💼 Total: ✅ Q ${ti.toFixed(2)}  ❌ Q ${te.toFixed(2)}\n💰 Neto: <b>Q ${(ti-te).toFixed(2)}</b>`;
+    await tgSend(chatId, reply);
     return;
   }
 
   // AYUDA
   if (parsed.type === 'help') {
-    await tgSend(chatId, `🤖 <b>Comandos del bot</b>\n\n` +
-      `<b>Registrar movimientos:</b>\n` +
-      `• "se vendieron tacos por 150"\n` +
-      `• "venta de 500 en la pizzería"\n` +
+    await tgSend(chatId,
+      `🤖 <b>Comandos disponibles</b>\n\n` +
+      `<b>📦 Registrar ventas:</b>\n` +
+      `• "vendí 10 tacos a Q15"\n` +
+      `• "se vendieron 5 pupusas a 20"\n` +
+      `• "venta de 500"\n\n` +
+      `<b>💸 Registrar gastos:</b>\n` +
       `• "gasto de 200 en renta"\n` +
-      `• "compré insumos por 350"\n\n` +
-      `<b>Consultas:</b>\n` +
-      `• /balance — ver resumen de todos los negocios\n` +
-      `• /negocios — listar negocios\n\n` +
-      `<b>Crear negocio:</b>\n` +
-      `• /nuevo negocio Pizzería Central\n\n` +
-      `El bot entiende lenguaje natural 🧠\n` +
-      `No necesitás escribir exacto.`
+      `• "compré 3 kg de carne a Q50"\n` +
+      `• "pagamos Q150 de luz"\n\n` +
+      `<b>📊 Consultas:</b>\n` +
+      `• /balance — resumen general\n` +
+      `• /negocios — listar negocios\n` +
+      `• /inventario — ver productos vendidos hoy\n\n` +
+      `<b>🏢 Negocios:</b>\n` +
+      `• /nuevo negocio Tacos Don Pedro`
     );
     return;
   }
@@ -170,37 +180,49 @@ async function handleMessage(msg) {
   // LISTAR NEGOCIOS
   if (parsed.type === 'list_businesses') {
     const r = await pool.query('SELECT name FROM businesses ORDER BY name');
-    if (!r.rows.length) {
-      await tgSend(chatId, '🏢 No hay negocios. Creá uno con:\n<b>/nuevo negocio [nombre]</b>');
-      return;
-    }
+    if (!r.rows.length) { await tgSend(chatId, '🏢 Sin negocios. Creá uno con /nuevo negocio [nombre]'); return; }
     await tgSend(chatId, '🏢 <b>Tus negocios:</b>\n\n' + r.rows.map(b => `• ${b.name}`).join('\n'));
+    return;
+  }
+
+  // INVENTARIO DEL DÍA
+  if (parsed.type === 'inventory') {
+    const today = new Date().toISOString().split('T')[0];
+    const r = await pool.query(`
+      SELECT b.name as biz, t.description, t.amount, t.type
+      FROM transactions t JOIN businesses b ON b.id=t.business_id
+      WHERE t.date=$1 ORDER BY b.name, t.created_at DESC
+    `, [today]);
+    if (!r.rows.length) { await tgSend(chatId, `📦 Sin movimientos hoy (${today})`); return; }
+    let reply = `📦 <b>Movimientos de hoy</b>\n\n`;
+    let lastBiz = '';
+    for (const row of r.rows) {
+      if (row.biz !== lastBiz) { reply += `\n🏢 <b>${row.biz}</b>\n`; lastBiz = row.biz; }
+      const icon = row.type === 'income' ? '✅' : '❌';
+      reply += `  ${icon} ${row.description} — Q ${parseFloat(row.amount).toFixed(2)}\n`;
+    }
+    await tgSend(chatId, reply);
     return;
   }
 
   // NUEVO NEGOCIO
   if (parsed.type === 'new_business') {
     const existing = await pool.query('SELECT id FROM businesses WHERE LOWER(name)=LOWER($1)', [parsed.name]);
-    if (existing.rows.length) {
-      await tgSend(chatId, `⚠️ Ya existe un negocio llamado <b>${parsed.name}</b>.`);
-      return;
-    }
+    if (existing.rows.length) { await tgSend(chatId, `⚠️ Ya existe <b>${parsed.name}</b>.`); return; }
     const colors = ['#6c5ce7','#00b894','#e17055','#0984e3','#fdcb6e','#e84393'];
     const color = colors[Math.floor(Math.random() * colors.length)];
     await pool.query('INSERT INTO businesses(name,category,color) VALUES($1,$2,$3)', [parsed.name, 'General', color]);
-    await tgSend(chatId, `✅ Negocio <b>${parsed.name}</b> creado con éxito.\n\nYa podés registrar movimientos para este negocio.`);
+    await tgSend(chatId, `✅ Negocio <b>${parsed.name}</b> creado.\n\nYa podés registrar movimientos para este negocio.`);
     return;
   }
 
-  // SIN MONTO
   if (parsed.type === 'no_amount') {
-    await tgSend(chatId, `⚠️ Entendí que es un ${parsed.type === 'income' ? 'ingreso' : 'gasto'} pero no encontré el monto.\n\nEjemplo: <b>"venta de tacos por 150"</b>`);
+    await tgSend(chatId, `⚠️ No encontré el monto.\n\nEjemplos:\n• "venta de 150"\n• "10 tacos a Q15"\n• "gasto de 200 en renta"`);
     return;
   }
 
-  // DESCONOCIDO
   if (parsed.type === 'unknown') {
-    await tgSend(chatId, `🤔 No entendí bien el mensaje.\n\nProbá con:\n• "venta de 200"\n• "gasto de 150 en renta"\n• /balance\n• /ayuda`);
+    await tgSend(chatId, `🤔 No entendí. Probá:\n• "vendí 10 tacos a Q15"\n• "gasto de 200"\n• /balance\n• /ayuda`);
     return;
   }
 
@@ -209,61 +231,42 @@ async function handleMessage(msg) {
   const bizList = businesses.rows;
 
   if (!bizList.length) {
-    await tgSend(chatId, `⚠️ No tenés negocios registrados.\n\nCreá uno primero:\n<b>/nuevo negocio [nombre]</b>`);
+    await tgSend(chatId, `⚠️ No tenés negocios.\n\nCreá uno con:\n/nuevo negocio [nombre]`);
     return;
   }
 
-  // Intentar match automático
   let matchedBiz = null;
   if (parsed.bizHint) {
     const result = findBestBusiness(parsed.bizHint, bizList);
     if (result && result.score > 0.6) matchedBiz = result.business;
   }
-
-  // Si solo hay un negocio, usarlo automáticamente
-  if (!matchedBiz && bizList.length === 1) {
-    matchedBiz = bizList[0];
-  }
+  if (!matchedBiz && bizList.length === 1) matchedBiz = bizList[0];
 
   if (matchedBiz) {
-    // Registrar directo
     await saveTransaction(chatId, matchedBiz, parsed, userName);
   } else {
-    // Preguntar a cuál negocio
-    sessions[chatId] = { step: 'choose_business', parsed, userName };
-    const bizButtons = bizList.map((b, i) => `${i + 1}. ${b.name}`).join('\n');
+    sessions[chatId] = { step: 'choose_business', parsed, userName, businesses: bizList };
+    const opts = bizList.map((b, i) => `${i + 1}. ${b.name}`).join('\n');
+    const icon = parsed.type === 'income' ? '💰' : '💸';
+    const label = parsed.type === 'income' ? 'Ingreso' : 'Gasto';
     await tgSend(chatId,
-      `${parsed.type === 'income' ? '💰' : '💸'} <b>${parsed.type === 'income' ? 'Ingreso' : 'Gasto'} de Q ${parsed.amount.toFixed(2)}</b>\n` +
-      `📝 "${parsed.description}"\n\n` +
-      `¿A qué negocio pertenece?\n\n${bizButtons}\n\n` +
-      `Respondé con el número o el nombre.`
+      `${icon} <b>${label}: Q ${parsed.amount.toFixed(2)}</b>\n📝 ${parsed.description}\n\n¿A qué negocio?\n\n${opts}\n\nResponde con el número o nombre.`
     );
-    sessions[chatId].businesses = bizList;
   }
 }
 
 async function handleSession(chatId, text, userName) {
   const session = sessions[chatId];
-
   if (session.step === 'choose_business') {
     const bizList = session.businesses;
     let chosen = null;
-
-    // Por número
     const num = parseInt(text);
-    if (num >= 1 && num <= bizList.length) {
-      chosen = bizList[num - 1];
-    } else {
-      // Por nombre fuzzy
+    if (num >= 1 && num <= bizList.length) chosen = bizList[num - 1];
+    else {
       const result = findBestBusiness(text, bizList);
       if (result) chosen = result.business;
     }
-
-    if (!chosen) {
-      await tgSend(chatId, `⚠️ No entendí. Respondé con el número o nombre del negocio.`);
-      return;
-    }
-
+    if (!chosen) { await tgSend(chatId, `⚠️ No entendí. Respondé con el número o nombre.`); return; }
     delete sessions[chatId];
     await saveTransaction(chatId, chosen, session.parsed, userName);
   }
@@ -272,58 +275,49 @@ async function handleSession(chatId, text, userName) {
 async function saveTransaction(chatId, business, parsed, userName) {
   await pool.query(
     'INSERT INTO transactions(business_id,type,amount,description,category,date) VALUES($1,$2,$3,$4,$5,$6)',
-    [business.id, parsed.type, parsed.amount, parsed.description, parsed.type === 'income' ? 'Ventas' : 'Gastos', new Date().toISOString().split('T')[0]]
+    [business.id, parsed.type, parsed.amount, parsed.description,
+     parsed.type === 'income' ? 'Ventas' : 'Gastos',
+     new Date().toISOString().split('T')[0]]
   );
-
-  const icon = parsed.type === 'income' ? '✅' : '❌';
-  const typeLabel = parsed.type === 'income' ? 'Ingreso' : 'Gasto';
-
-  // Calcular balance actualizado del negocio
   const r = await pool.query(
     `SELECT COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE -amount END),0) as balance FROM transactions WHERE business_id=$1`,
     [business.id]
   );
   const balance = parseFloat(r.rows[0].balance);
-
-  await tgSend(chatId,
-    `${icon} <b>${typeLabel} registrado</b>\n\n` +
-    `🏢 Negocio: <b>${business.name}</b>\n` +
-    `💵 Monto: <b>Q ${parsed.amount.toFixed(2)}</b>\n` +
-    `📝 Detalle: ${parsed.description}\n` +
-    `👤 Por: ${userName}\n\n` +
-    `📊 Balance actual de ${business.name}: <b>Q ${balance.toFixed(2)}</b>`
-  );
+  const icon = parsed.type === 'income' ? '✅' : '❌';
+  const label = parsed.type === 'income' ? 'Ingreso' : 'Gasto';
+  let reply = `${icon} <b>${label} registrado</b>\n\n`;
+  reply += `🏢 <b>${business.name}</b>\n`;
+  if (parsed.qty) reply += `📦 ${parsed.qty} × ${parsed.item} a Q${parsed.unitPrice.toFixed(2)}\n`;
+  reply += `💵 Total: <b>Q ${parsed.amount.toFixed(2)}</b>\n`;
+  reply += `📝 ${parsed.description}\n`;
+  reply += `👤 ${userName}\n\n`;
+  reply += `📊 Balance ${business.name}: <b>Q ${balance.toFixed(2)}</b>`;
+  await tgSend(chatId, reply);
 }
 
 // ============ WEBHOOK ============
 function setupBot(app) {
   app.post('/webhook/telegram', async (req, res) => {
-    res.sendStatus(200); // Responder rápido a Telegram
+    res.sendStatus(200);
     try {
       const update = req.body;
-      if (update.message) {
-        await handleMessage(update.message);
-      }
-    } catch (e) {
-      console.error('Bot error:', e.message);
-    }
+      if (update.message) await handleMessage(update.message);
+    } catch (e) { console.error('Bot error:', e.message); }
   });
-
-  console.log('🤖 Bot de Telegram listo en /webhook/telegram');
+  console.log('🤖 Bot de Telegram listo');
 }
 
-// ============ REGISTRAR WEBHOOK ============
 async function registerWebhook(baseUrl) {
   const token = await getConfig('tg_token');
-  if (!token) { console.log('⚠️ Bot: no hay tg_token configurado todavía'); return; }
-  const webhookUrl = `${baseUrl}/webhook/telegram`;
+  if (!token) { console.log('⚠️ Bot: sin tg_token'); return; }
   const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: webhookUrl })
+    body: JSON.stringify({ url: `${baseUrl}/webhook/telegram` })
   });
   const data = await res.json();
-  console.log('🤖 Webhook registrado:', data.ok ? '✅' : '❌ ' + data.description);
+  console.log('🤖 Webhook:', data.ok ? '✅' : '❌ ' + data.description);
 }
 
 module.exports = { setupBot, registerWebhook };
