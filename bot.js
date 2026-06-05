@@ -212,6 +212,9 @@ async function handleMessage(msg) {
   // ── TEXTO NORMAL ──
   if (!text) return;
 
+  // Comandos de userbot
+  if (await handleUserbotCommands(chatId, text, userName)) return;
+
   // Detectar solicitud de publicación con texto (sin foto)
   if (/publicar|publish/i.test(text)) {
     await handlePublishRequest(chatId, text, null, userName);
@@ -572,6 +575,85 @@ async function registerWebhook(baseUrl) {
   });
   const data = await res.json();
   console.log('Webhook:', data.ok ? 'OK' : 'ERROR ' + data.description);
+}
+
+
+// ── Comandos de autenticación del userbot ──
+async function handleUserbotCommands(chatId, text, userName) {
+  const t = text.trim();
+
+  // /conectar_cuenta — inicia el proceso de autenticacion
+  if (t === '/conectar_cuenta' || t === 'conectar_cuenta') {
+    const phone = await getConfig('tg_user_phone');
+    if (!phone) {
+      await tgSend(chatId, 'Para conectar tu cuenta necesito tu numero de telefono.\n\nEscribi:\n/mi_numero +50212345678');
+      return true;
+    }
+    // Marcar que estamos esperando el codigo
+    await pool.query(
+      'INSERT INTO config(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2',
+      ['tg_auth_code', 'pending']
+    );
+    try {
+      const { startUserbot } = require('./userbot');
+      startUserbot().catch(function(e) { console.log('Userbot auth:', e.message); });
+    } catch(e) {}
+    await tgSend(chatId, 'Iniciando conexion con tu cuenta...\n\nTelegram te va a mandar un codigo. Cuando lo recibas escribime:\n/codigo 12345');
+    return true;
+  }
+
+  // /mi_numero +502... — guardar numero
+  const phoneMatch = t.match(/^\/mi_numero\s+(\+\d{7,15})/i);
+  if (phoneMatch) {
+    await pool.query(
+      'INSERT INTO config(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2',
+      ['tg_user_phone', phoneMatch[1]]
+    );
+    await tgSend(chatId, 'Numero guardado: ' + phoneMatch[1] + '\n\nAhora escribe /conectar_cuenta para iniciar.');
+    return true;
+  }
+
+  // /codigo 12345 — ingresar codigo de verificacion
+  const codeMatch = t.match(/^\/codigo\s+(\d{4,6})/i);
+  if (codeMatch) {
+    await pool.query(
+      'INSERT INTO config(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2',
+      ['tg_auth_code', codeMatch[1]]
+    );
+    await tgSend(chatId, 'Codigo recibido. Verificando...');
+    return true;
+  }
+
+  // /grupo_id -1001234567890 — configurar grupo donde publicar
+  const groupMatch = t.match(/^\/grupo_id\s+(-?\d+)/i);
+  if (groupMatch) {
+    await pool.query(
+      'INSERT INTO config(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2',
+      ['tg_user_group_id', groupMatch[1]]
+    );
+    await tgSend(chatId, 'Grupo configurado: ' + groupMatch[1] + '\n\nAhora las publicaciones saldran desde tu cuenta personal en ese grupo.');
+    return true;
+  }
+
+  // /estado_userbot — ver si esta conectado
+  if (t === '/estado_userbot' || t === 'estado_userbot') {
+    try {
+      const userbot = require('./userbot');
+      const connected = userbot.isConnected();
+      const groupId = await getConfig('tg_user_group_id');
+      await tgSend(chatId,
+        'Estado userbot:\n' +
+        'Conexion: ' + (connected ? 'Conectado' : 'Desconectado') + '\n' +
+        'Grupo: ' + (groupId || 'No configurado') + '\n\n' +
+        (connected ? 'Listo para publicar desde tu cuenta.' : 'Escribe /conectar_cuenta para conectar.')
+      );
+    } catch(e) {
+      await tgSend(chatId, 'Userbot no disponible: ' + e.message);
+    }
+    return true;
+  }
+
+  return false;
 }
 
 module.exports = { setupBot: setupBot, registerWebhook: registerWebhook };
