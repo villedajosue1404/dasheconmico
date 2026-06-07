@@ -6,7 +6,6 @@
 const { TelegramClient } = require('telegram');
 const { StringSession }  = require('telegram/sessions');
 const { NewMessage }     = require('telegram/events');
-const input              = require('input');
 const { pool }           = require('./db/schema');
 const { publishToFacebook } = require('./scheduler');
 
