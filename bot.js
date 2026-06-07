@@ -98,17 +98,40 @@ function parseDays(text) {
 // Acepta: "8am", "8:00 am", "8", "20:00", "8 am 12 pm 5 pm"
 function parseTimes(text) {
   const times = [];
-  // Patrón: número seguido de opcionalmente :minutos y opcionalmente am/pm
-  const re = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/gi;
+  // Solo detectar horas si tienen am/pm O si estan despues de "a las", "las", ":"
+  // Esto evita que numeros del contenido se confundan con horas
+  const re1 = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi; // con am/pm
+  const re2 = /(?:a\s+las?|las?)\s+(\d{1,2})(?::(\d{2}))?(\s*(?:am|pm))?/gi; // despues de "a las"
+  const re3 = /(\d{1,2}):(\d{2})/g; // formato 12:00
   let m;
-  while ((m = re.exec(text)) !== null) {
+  // Buscar con am/pm
+  while ((m = re1.exec(text)) !== null) {
     let hour = parseInt(m[1]);
-    const min  = m[2] ? parseInt(m[2]) : 0;
-    const ampm = m[3] ? m[3].toLowerCase() : null;
-    // Convertir a formato 24h
+    const min = m[2] ? parseInt(m[2]) : 0;
+    const ampm = m[3].toLowerCase();
     if (ampm === 'pm' && hour !== 12) hour += 12;
     if (ampm === 'am' && hour === 12) hour = 0;
-    // Solo horas válidas
+    if (hour >= 0 && hour <= 23) {
+      const t = String(hour).padStart(2,'0') + ':' + String(min).padStart(2,'0');
+      if (times.indexOf(t) === -1) times.push(t);
+    }
+  }
+  // Buscar despues de "a las"
+  while ((m = re2.exec(text)) !== null) {
+    let hour = parseInt(m[1]);
+    const min = m[2] ? parseInt(m[2]) : 0;
+    const ampm = m[3] ? m[3].trim().toLowerCase() : null;
+    if (ampm === 'pm' && hour !== 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    if (hour >= 0 && hour <= 23) {
+      const t = String(hour).padStart(2,'0') + ':' + String(min).padStart(2,'0');
+      if (times.indexOf(t) === -1) times.push(t);
+    }
+  }
+  // Buscar formato HH:MM
+  while ((m = re3.exec(text)) !== null) {
+    const hour = parseInt(m[1]);
+    const min = parseInt(m[2]);
     if (hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
       const t = String(hour).padStart(2,'0') + ':' + String(min).padStart(2,'0');
       if (times.indexOf(t) === -1) times.push(t);
@@ -197,15 +220,30 @@ async function handleMessage(msg) {
   // Si el usuario mandó una foto con caption
   if (photo && photo.length > 0) {
     const caption = (msg.caption || '').trim();
+    const fileId = photo[photo.length - 1].file_id;
     if (!caption) {
-      await tgSend(chatId, 'Recibí la foto. Ahora enviame el texto de la publicacion y como programarla.');
-      // Guardamos la foto para el siguiente mensaje
-      const fileId = photo[photo.length - 1].file_id;
+      // Sin caption — guardar foto y pedir texto
+      await tgSend(chatId, 'Foto recibida. Ahora enviame el texto y cuando publicar.');
       sessions[chatId] = { step: 'waiting_caption', photoFileId: fileId, userName: userName };
       return;
     }
-    // Caption tiene texto — procesarlo
-    await handlePublishRequest(chatId, caption, photo[photo.length - 1].file_id, userName);
+    // Con caption — el contenido es el caption completo, sin las palabras de comando
+    const captionLower = caption.toLowerCase();
+    const hasPublishTrigger = captionLower.includes('publica ahorita') || captionLower.includes('publicar ahorita') || captionLower.includes('publica ahora') || captionLower.includes('publicar ahora');
+    if (hasPublishTrigger) {
+      // Publicar inmediatamente — contenido = caption sin el trigger
+      const postContent = caption.replace(/publica ahorita|publicar ahorita|publica ahora|publicar ahora/gi, '').trim();
+      const photoUrl = await getTelegramFileUrl(fileId);
+      const rTg = await publishToTelegram(postContent, photoUrl);
+      const rFb = await publishToFacebook(postContent, photoUrl);
+      let reply = rTg.ok ? 'Publicado en Telegram' : 'Error TG: ' + rTg.error;
+      reply += '\n' + (rFb.ok ? 'Publicado en Facebook' : 'Error FB: ' + rFb.error);
+      await pool.query('INSERT INTO posts(network,content,status,published_at) VALUES($1,$2,$3,NOW())', ['tg', postContent || '[foto]', 'published']);
+      await tgSend(chatId, reply);
+    } else {
+      // Tiene horario o programación — procesar normalmente
+      await handlePublishRequest(chatId, caption, fileId, userName);
+    }
     return;
   }
 
@@ -416,6 +454,18 @@ async function handleMessage(msg) {
 async function handlePublishRequest(chatId, text, photoFileId, userName) {
   const t = text.toLowerCase();
 
+  // "ahorita", "ahora", "ya" = publicar inmediatamente sin buscar horarios
+  if (/\bahorita\b|\bahora\b|\bya\b|^publicar$|^publica$/i.test(t)) {
+    const content = text.replace(/publicar|publica|ahorita|ahora|ya/gi,'').trim();
+    const photoUrl = photoFileId ? await getTelegramFileUrl(photoFileId) : null;
+    const rTg = await publishToTelegram(content || '', photoUrl);
+    const rFb = await publishToFacebook(content || '', photoUrl);
+    let reply = rTg.ok ? 'Publicado en Telegram' : 'Error TG: ' + rTg.error;
+    reply += '\n' + (rFb.ok ? 'Publicado en Facebook' : 'Error FB: ' + rFb.error);
+    await pool.query('INSERT INTO posts(network,content,status,published_at) VALUES($1,$2,$3,NOW())', ['tg', content || '[foto]', 'published']);
+    await tgSend(chatId, reply);
+    return;
+  }
   // Detectar si hay horarios en el mensaje
   const times = parseTimes(t);
 
