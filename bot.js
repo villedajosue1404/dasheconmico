@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const { pool } = require('./db/schema');
 const { publishToTelegram, publishToFacebook } = require('./scheduler');
+const { analyzeFinancialMessage, generateReport, generatePostText, getBusinessContext } = require('./ai');
 
 // ── Enviar mensaje de texto al usuario del bot ──
 async function tgSend(chatId, text) {
@@ -149,6 +150,8 @@ function parseMessage(text) {
   if (isCmd(t, ['negocios']))    return { type: 'list_businesses' };
   if (isCmd(t, ['inventario']))  return { type: 'inventory' };
   if (isCmd(t, ['programados'])) return { type: 'list_scheduled' };
+  if (isCmd(t, ['analizar', 'analisis', 'reporte'])) return { type: 'ai_report' };
+  if (t.startsWith('/crear_post') || t.startsWith('crear post')) return { type: 'ai_post' };
 
   // /ventas mes — ventas del mes actual
   if (isCmd(t, ['ventas','ingresos'])) return { type: 'sales_month' };
@@ -376,6 +379,34 @@ async function handleMessage(msg) {
   }
 
   // ── LISTAR POSTS PROGRAMADOS ──
+  // ── REPORTE CON IA ──
+  if (parsed.type === 'ai_report') {
+    await tgSend(chatId, 'Analizando tus negocios...');
+    const report = await generateReport(text.replace(/analizar|analisis|reporte/gi,'').trim() || 'Dame un resumen general de mis negocios');
+    await tgSend(chatId, report);
+    return;
+  }
+
+  // ── CREAR PUBLICACIÓN CON IA ──
+  if (parsed.type === 'ai_post') {
+    const prompt = text.replace(/crear\s+post|\/crear_post/gi,'').trim();
+    if (!prompt) {
+      await tgSend(chatId, 'Decime que quieres publicar. Ejemplo:\n/crear_post promo de tacos 2x1 para el fin de semana');
+      return;
+    }
+    await tgSend(chatId, 'Creando publicacion...');
+    // Obtener negocio si hay uno activo
+    const bizRes = await pool.query('SELECT name FROM businesses ORDER BY name LIMIT 1');
+    const bizName = bizRes.rows.length ? bizRes.rows[0].name : null;
+    const postText = await generatePostText(prompt, bizName);
+    if (postText) {
+      await tgSend(chatId, 'Aqui esta tu publicacion:\n\n' + postText + '\n\n Para publicarla, copia el texto y envialo con "Publica ahorita"');
+    } else {
+      await tgSend(chatId, 'No pude generar la publicacion. Intenta de nuevo.');
+    }
+    return;
+  }
+
   if (parsed.type === 'list_scheduled') {
     const r = await pool.query('SELECT * FROM scheduled_posts WHERE active=TRUE ORDER BY id');
     if (!r.rows.length) { await tgSend(chatId, 'No hay publicaciones programadas.'); return; }
@@ -423,6 +454,40 @@ async function handleMessage(msg) {
   }
 
   if (parsed.type === 'unknown') {
+    // Intentar con IA antes de rendirse
+    if (process.env.GROQ_API_KEY) {
+      const businesses = await pool.query('SELECT id, name FROM businesses ORDER BY name');
+      const bizList = businesses.rows;
+      const aiResult = await analyzeFinancialMessage(text, bizList);
+      if (aiResult && aiResult.type === 'transaction' && aiResult.amount) {
+        // La IA interpretó como transacción
+        parsed.type = aiResult.transType || 'income';
+        parsed.amount = aiResult.amount;
+        parsed.description = aiResult.description || text.slice(0, 50);
+        parsed.bizHint = aiResult.business;
+        // Continuar con el flujo normal de transacción
+        let matchedBiz = null;
+        if (parsed.bizHint) {
+          const result = findBestBusiness(parsed.bizHint, bizList);
+          if (result && result.score > 0.5) matchedBiz = result.business;
+        }
+        if (!matchedBiz && bizList.length === 1) matchedBiz = bizList[0];
+        if (matchedBiz) {
+          await saveTransaction(chatId, matchedBiz, parsed, userName);
+        } else if (bizList.length > 0) {
+          sessions[chatId] = { step: 'choose_business', parsed: parsed, userName: userName, businesses: bizList };
+          let opts = '';
+          for (let i = 0; i < bizList.length; i++) opts += (i+1) + '. ' + bizList[i].name + '\n';
+          await tgSend(chatId, (parsed.type === 'income' ? 'Ingreso' : 'Gasto') + ': Q ' + parsed.amount.toFixed(2) + '\n' + parsed.description + '\n\nA que negocio?\n\n' + opts);
+        }
+        return;
+      } else if (aiResult && aiResult.type === 'query') {
+        // La IA interpretó como consulta — generar reporte
+        const report = await generateReport(text);
+        await tgSend(chatId, report);
+        return;
+      }
+    }
     await tgSend(chatId, 'No entendi. Prueba:\n- "vendi 10 tacos a Q15"\n- "gasto de 200"\n- /balance\n- /ayuda');
     return;
   }
