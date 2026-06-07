@@ -1,114 +1,200 @@
-# 🎯 Centro de Mando — Guía de instalación
+# 🎯 Centro de Mando
 
-## ¿Qué incluye?
-- Gestión de negocios con finanzas (ingresos, gastos, balance)
-- Publicaciones a Facebook y Telegram
-- Comparación de publicidades por alcance y negocio
-- Base de datos PostgreSQL en la nube
-- Acceso desde cualquier IP / dispositivo
+Sistema completo de gestión de negocios con bot de Telegram, publicación automática en redes sociales y control financiero en tiempo real.
 
 ---
 
-## PASO 1 — Subir el backend a Railway (gratis)
+## ¿Qué hace?
 
-1. Creá una cuenta en **https://railway.app** (con tu cuenta de GitHub)
-2. Hacé clic en **"New Project"**
-3. Elegí **"Deploy from GitHub repo"**
-   - Si no tenés GitHub, elegí **"Empty project"** y usá Railway CLI (ver más abajo)
-4. Subí la carpeta `misocial/` a un repo de GitHub
-5. En Railway, conectá ese repo
-6. Railway detecta automáticamente que es Node.js
+- **Bot de Telegram inteligente** — registrá ventas y gastos con lenguaje natural ("vendí 10 tacos a Q15")
+- **Publicación automática** — mandá foto + texto al bot y publica en Telegram y Facebook desde tu cuenta personal
+- **Publicaciones programadas** — definí días y horarios ("publicar viernes a las 9am y 6pm")
+- **Control financiero** — balance por negocio, ventas del mes, historial de movimientos
+- **Dashboard web** — panel de control accesible desde cualquier dispositivo
 
 ---
 
-## PASO 2 — Agregar la base de datos PostgreSQL
+## Stack
 
-1. En tu proyecto de Railway, hacé clic en **"New"** → **"Database"** → **"PostgreSQL"**
-2. Railway crea la DB y automáticamente agrega la variable `DATABASE_URL`
-3. ¡Listo! La app la usa automáticamente.
-
----
-
-## PASO 3 — Deploy
-
-1. Railway hace el deploy automáticamente
-2. Andá a **Settings** → **Domains** → **Generate domain**
-3. Te da una URL como: `https://tu-app-production.up.railway.app`
-4. **Copiá esa URL** — la vas a necesitar en el paso 4
+| Capa | Tecnología |
+|------|-----------|
+| Backend | Node.js + Express |
+| Base de datos | PostgreSQL (Railway) |
+| Bot | Telegram Bot API + GramJS (MTProto) |
+| Frontend | HTML/CSS/JS (single file) |
+| Deploy | Railway |
 
 ---
 
-## PASO 4 — Abrir el Centro de Mando
+## Estructura
 
-1. Abrí el archivo `index.html` (o la URL de Railway si lo pusiste en public/)
-2. Andá a **Configuración** en el menú
-3. En **"URL del servidor"**, pegá tu URL de Railway
-4. Hacé clic en **Guardar**
-5. Deberías ver ✅ "Servidor conectado"
-
----
-
-## PASO 5 — Configurar Telegram (una sola vez)
-
-1. Abrí Telegram → buscá `@BotFather`
-2. Enviá `/newbot` → seguí las instrucciones
-3. Copiá el **Bot Token** que te da
-4. Agregá el bot a tu canal como administrador
-5. Para el **Chat ID**: abrí `https://api.telegram.org/bot[TOKEN]/getUpdates` y buscá `"id"` dentro de `"chat"`
-6. En el Centro de Mando → Configuración → pegá el Token y Chat ID → **"Guardar en servidor"**
-
-✅ **Se guarda en la base de datos del servidor. No necesitás hacerlo nunca más.**
-
----
-
-## PASO 6 — Compartir acceso a tu equipo
-
-Simplemente compartí la **URL de Railway** con tu equipo.
-Todos ven los mismos datos en tiempo real.
-
-Si querés usar el archivo HTML local: compartí el archivo `index.html` y la URL del servidor.
-Cada persona lo abre en su navegador y pone la misma URL del servidor.
+```
+/
+├── server.js          # Servidor principal (Express)
+├── bot.js             # Bot de Telegram — comandos y lógica
+├── scheduler.js       # Publicador automático (corre cada minuto)
+├── userbot.js         # Userbot MTProto (publica desde cuenta personal)
+├── package.json       # Dependencias
+├── nixpacks.toml      # Config de build para Railway
+├── railway.json       # Config de deploy para Railway
+├── Procfile           # Comando de inicio
+├── .env.example       # Variables de entorno de ejemplo
+├── db/
+│   └── schema.js      # Conexión a DB y creación de tablas
+├── routes/
+│   ├── config.js      # API: configuración (tokens, etc)
+│   ├── businesses.js  # API: negocios
+│   ├── transactions.js# API: ingresos y gastos
+│   └── posts.js       # API: publicaciones
+└── public/
+    └── index.html     # Frontend completo (dashboard)
+```
 
 ---
 
-## Usando Railway CLI (alternativa sin GitHub)
+## Instalación en Railway (nueva instancia)
+
+### Paso 1 — Fork o cloná el repo
 
 ```bash
-npm install -g @railway/cli
-railway login
-cd misocial
-railway init
-railway up
-railway add --plugin postgresql
+git clone https://github.com/tu-usuario/tu-repo.git
+cd tu-repo
+```
+
+### Paso 2 — Crear proyecto en Railway
+
+1. Andá a [railway.app](https://railway.app) y creá cuenta
+2. **New Project** → **Deploy from GitHub** → seleccioná el repo
+3. Railway detecta Node.js automáticamente
+
+### Paso 3 — Agregar PostgreSQL
+
+1. En el proyecto: **New** → **Database** → **Add PostgreSQL**
+2. Railway conecta la DB automáticamente via `DATABASE_URL`
+
+### Paso 4 — Variables de entorno
+
+En tu servicio → **Variables** → agregá:
+
+| Variable | Descripción | Ejemplo |
+|----------|-------------|---------|
+| `DATABASE_URL` | Auto-generada por Railway | — |
+| `NODE_ENV` | Entorno | `production` |
+| `TG_API_ID` | API ID de my.telegram.org | `12345678` |
+| `TG_API_HASH` | API Hash de my.telegram.org | `abc123...` |
+| `TG_USER_PHONE` | Tu número de teléfono | `+50212345678` |
+
+### Paso 5 — Deploy
+
+Railway hace el deploy automáticamente al hacer push. La app crea las tablas sola al iniciar.
+
+### Paso 6 — Configurar desde el dashboard
+
+1. Abrí la URL de Railway en el navegador
+2. Andá a **Configuración**
+3. Ingresá el token del bot de Telegram y el Chat ID
+4. Guardá — el webhook se registra automáticamente
+
+### Paso 7 — Autenticar userbot (una sola vez)
+
+En la Console de Railway:
+
+```bash
+node auth.js
+```
+
+Ingresá tu número y el código que te manda Telegram. La sesión queda guardada en la DB permanentemente.
+
+---
+
+## Comandos del bot
+
+### Finanzas
+
+| Comando | Ejemplo |
+|---------|---------|
+| Registrar venta | `"vendí 10 tacos a Q15"` |
+| Registrar venta simple | `"venta de 500"` |
+| Registrar gasto | `"gasto de 200 en renta"` |
+| Registrar gasto con cantidad | `"compré 3 kg carne a Q50"` |
+| Ver balance | `/balance` |
+| Ver ventas del mes | `/ventas` |
+| Ver movimientos de hoy | `/inventario` |
+
+### Negocios
+
+| Comando | Ejemplo |
+|---------|---------|
+| Crear negocio | `/nuevo negocio Tacos Don Pedro` |
+| Listar negocios | `/negocios` |
+
+### Publicaciones
+
+| Acción | Cómo |
+|--------|------|
+| Publicar ahora | Foto + texto + `"Publica ahorita"` |
+| Programar días específicos | Foto + texto + `"publicar viernes sábado a las 9am 6pm"` |
+| Programar todos los días | Texto + `"publicar cada día a las 8am 12pm"` |
+| Ver programados | `/programados` |
+| Cancelar programado | `/cancelar 2` |
+
+### Userbot
+
+| Comando | Descripción |
+|---------|-------------|
+| `/conectar_cuenta` | Iniciar autenticación |
+| `/codigo 12345` | Ingresar código de verificación |
+| `/grupo_id -1001234567890` | Configurar grupo donde publicar |
+| `/estado_userbot` | Ver si está conectado |
+
+---
+
+## Variables de entorno completas
+
+```env
+# Base de datos (Railway la genera automáticamente)
+DATABASE_URL=postgresql://...
+
+# Entorno
+NODE_ENV=production
+
+# Telegram Bot (obtener de @BotFather)
+# Se configura desde el dashboard, no hace falta acá
+
+# Telegram Userbot (obtener de my.telegram.org)
+TG_API_ID=12345678
+TG_API_HASH=abc123def456...
+TG_USER_PHONE=+50212345678
 ```
 
 ---
 
-## Variables de entorno necesarias
+## Base de datos
 
-| Variable | Descripción |
-|----------|-------------|
-| `DATABASE_URL` | La agrega Railway automáticamente |
-| `PORT` | Railway la asigna automáticamente |
-| `NODE_ENV` | Podés poner `production` |
+Las tablas se crean automáticamente al iniciar el servidor:
+
+| Tabla | Descripción |
+|-------|-------------|
+| `config` | Tokens, sesiones y configuración |
+| `businesses` | Negocios registrados |
+| `transactions` | Ingresos y gastos |
+| `posts` | Historial de publicaciones |
+| `scheduled_posts` | Publicaciones programadas |
 
 ---
 
-## Estructura de archivos
+## Costo estimado en Railway
 
-```
-misocial/
-├── server.js          ← Servidor principal
-├── package.json       ← Dependencias
-├── railway.json       ← Config de Railway
-├── .env.example       ← Variables de entorno (referencia)
-├── db/
-│   └── schema.js      ← Base de datos (crea tablas automáticamente)
-├── routes/
-│   ├── config.js      ← Tokens y configuración
-│   ├── businesses.js  ← Negocios y finanzas
-│   ├── transactions.js← Ingresos y gastos
-│   └── posts.js       ← Publicaciones sociales
-└── public/
-    └── index.html     ← Centro de mando (frontend completo)
-```
+| Componente | Costo mensual |
+|-----------|---------------|
+| Servidor Node.js | ~$1.50 |
+| PostgreSQL | ~$0.50 |
+| **Total** | **~$2/mes** |
+
+Railway da $5 de crédito gratis al mes — suficiente para un proyecto de este tamaño.
+
+---
+
+## Licencia
+
+MIT — libre para uso personal y comercial.
