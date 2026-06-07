@@ -29,13 +29,26 @@ async function publishToTelegram(content, photoUrl) {
 
   try {
     if (photoUrl) {
-      const res = await fetch('https://api.telegram.org/bot' + token + '/sendPhoto', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: content, parse_mode: 'HTML' })
-      });
-      const data = await res.json();
-      return { ok: data.ok, error: data.description };
+      // Descargar la foto y enviarla como form-data para evitar errores de URL expirada
+      try {
+        const FormData = require('form-data');
+        const photoRes = await fetch(photoUrl);
+        const photoBuffer = await photoRes.buffer();
+        const form = new FormData();
+        form.append('chat_id', chatId);
+        form.append('caption', content);
+        form.append('parse_mode', 'HTML');
+        form.append('photo', photoBuffer, { filename: 'photo.jpg', contentType: 'image/jpeg' });
+        const res = await fetch('https://api.telegram.org/bot' + token + '/sendPhoto', {
+          method: 'POST',
+          body: form,
+          headers: form.getHeaders()
+        });
+        const data = await res.json();
+        return { ok: data.ok, error: data.description };
+      } catch(e) {
+        return { ok: false, error: e.message };
+      }
     } else {
       const res = await fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
         method: 'POST',
