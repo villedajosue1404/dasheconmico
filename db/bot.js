@@ -232,7 +232,7 @@ async function handleMessage(msg) {
     const hasPublishTrigger = triggerWords.test(caption);
     if (hasPublishTrigger) {
       // Publicar inmediatamente — contenido = caption sin el trigger
-      const postContent = caption.replace(triggerWords, '').trim();
+      const postContent = caption.replace(/publica\s+ahorita|publicar\s+ahorita|publica\s+ahora|publicar\s+ahora/gi, '').trim();
       const photoUrl = await getTelegramFileUrl(fileId);
       const rTg = await publishToTelegram(postContent, photoUrl);
       const rFb = await publishToFacebook(postContent, photoUrl);
