@@ -220,15 +220,30 @@ async function handleMessage(msg) {
   // Si el usuario mandó una foto con caption
   if (photo && photo.length > 0) {
     const caption = (msg.caption || '').trim();
+    const fileId = photo[photo.length - 1].file_id;
     if (!caption) {
-      await tgSend(chatId, 'Recibí la foto. Ahora enviame el texto de la publicacion y como programarla.');
-      // Guardamos la foto para el siguiente mensaje
-      const fileId = photo[photo.length - 1].file_id;
+      // Sin caption — guardar foto y pedir texto
+      await tgSend(chatId, 'Foto recibida. Ahora enviame el texto y cuando publicar.');
       sessions[chatId] = { step: 'waiting_caption', photoFileId: fileId, userName: userName };
       return;
     }
-    // Caption tiene texto — procesarlo
-    await handlePublishRequest(chatId, caption, photo[photo.length - 1].file_id, userName);
+    // Con caption — el contenido es el caption completo, sin las palabras de comando
+    const triggerWords = /\s*(publica\s+ahorita|publica\s+ahora|publicar\s+ahorita|publicar\s+ahora|publica|publicar)\s*$/i;
+    const hasPublishTrigger = triggerWords.test(caption);
+    if (hasPublishTrigger) {
+      // Publicar inmediatamente — contenido = caption sin el trigger
+      const postContent = caption.replace(triggerWords, '').trim();
+      const photoUrl = await getTelegramFileUrl(fileId);
+      const rTg = await publishToTelegram(postContent, photoUrl);
+      const rFb = await publishToFacebook(postContent, photoUrl);
+      let reply = rTg.ok ? 'Publicado en Telegram' : 'Error TG: ' + rTg.error;
+      reply += '\n' + (rFb.ok ? 'Publicado en Facebook' : 'Error FB: ' + rFb.error);
+      await pool.query('INSERT INTO posts(network,content,status,published_at) VALUES($1,$2,$3,NOW())', ['tg', postContent || '[foto]', 'published']);
+      await tgSend(chatId, reply);
+    } else {
+      // Tiene horario o programación — procesar normalmente
+      await handlePublishRequest(chatId, caption, fileId, userName);
+    }
     return;
   }
 
