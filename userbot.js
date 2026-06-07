@@ -81,13 +81,15 @@ async function publishAsUser(groupId, content, photoUrl) {
   }
   try {
     if (photoUrl) {
-      // Descargar la foto y enviarla
-      const fetch   = require('node-fetch');
-      const res     = await fetch(photoUrl);
-      const buffer  = await res.buffer();
+      // Descargar la foto y enviarla como imagen (no como documento)
+      const fetch  = require('node-fetch');
+      const res    = await fetch(photoUrl);
+      const buffer = await res.buffer();
       await client.sendFile(groupId, {
-        file:    buffer,
-        caption: content
+        file:       buffer,
+        caption:    content,
+        forceDocument: false,  // false = enviar como imagen, no como archivo
+        attributes: []
       });
     } else {
       await client.sendMessage(groupId, { message: content });
