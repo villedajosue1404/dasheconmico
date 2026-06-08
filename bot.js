@@ -542,7 +542,13 @@ async function handleMessage(msg) {
         return;
       }
     }
-    await tgSend(chatId, 'No entendi. Prueba:\n- "vendi 10 tacos a Q15"\n- "gasto de 200"\n- /balance\n- /ayuda');
+    // Si Groq está disponible, intentar responder con IA
+    if (process.env.GROQ_API_KEY) {
+      const report = await generateReport(text, chatId);
+      await tgSend(chatId, report);
+    } else {
+      await tgSend(chatId, 'No entendi. Prueba:\n- "vendi 10 tacos a Q15"\n- "gasto de 200"\n- /balance\n- /ayuda');
+    }
     return;
   }
 
