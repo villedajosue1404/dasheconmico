@@ -157,6 +157,10 @@ function parseMessage(text) {
   if (t.startsWith('/imagen') || t.startsWith('imagen ')) return { type: 'gen_image' };
   if (t.startsWith('/informe') || t.startsWith('/reporte')) return { type: 'report' };
   if (t.startsWith('/excel')) return { type: 'excel' };
+  if (isCmd(t, ['ultimas', 'ultimos', 'recientes'])) return { type: 'last_tx' };
+  if (t.startsWith('/borrar negocio')) return { type: 'delete_business' };
+  if (t.match(/^\/borrar\s+\d+/)) return { type: 'delete_tx' };
+  if (t.match(/^\/editar\s+\d+/)) return { type: 'edit_tx' };
 
   // /ventas mes — ventas del mes actual
   if (isCmd(t, ['ventas','ingresos'])) return { type: 'sales_month' };
@@ -424,6 +428,75 @@ async function handleMessage(msg) {
     const prompt = text.replace(/analizar|analisis|reporte/gi,'').trim() || 'Dame un resumen general de mis negocios';
     const report = await generateReport(prompt, chatId);
     await tgSend(chatId, report);
+    return;
+  }
+
+  // ── VER ÚLTIMAS TRANSACCIONES ──
+  if (parsed.type === 'last_tx') {
+    const r = await pool.query(
+      'SELECT t.id,t.type,t.amount,t.description,t.date,b.name as biz ' +
+      'FROM transactions t JOIN businesses b ON b.id=t.business_id ' +
+      'ORDER BY t.created_at DESC LIMIT 10'
+    );
+    if (!r.rows.length) { await tgSend(chatId, 'No hay transacciones todavia.'); return; }
+    let reply = '<b>Ultimas transacciones</b>\n\n';
+    r.rows.forEach(function(t) {
+      const icon = t.type === 'income' ? '+' : '-';
+      reply += icon + ' <b>#' + t.id + '</b> ' + t.biz + ' Q' + parseFloat(t.amount).toFixed(2) + '\n';
+      reply += '   ' + t.description + ' · ' + t.date + '\n\n';
+    });
+    reply += 'Para borrar: /borrar [id]\nPara editar: /editar [id] monto 500\nPara editar descripcion: /editar [id] desc nueva descripcion';
+    await tgSend(chatId, reply);
+    return;
+  }
+
+  // ── BORRAR NEGOCIO ──
+  if (parsed.type === 'delete_business') {
+    const bizName = text.replace(/\/borrar negocio/gi,'').trim();
+    if (!bizName) { await tgSend(chatId, 'Indica el nombre del negocio.\n/borrar negocio Nombre'); return; }
+    const biz = await pool.query('SELECT id,name FROM businesses WHERE LOWER(name) LIKE LOWER($1)', ['%'+bizName+'%']);
+    if (!biz.rows.length) { await tgSend(chatId, 'No encontre un negocio con ese nombre.'); return; }
+    const b = biz.rows[0];
+    // Confirmar antes de borrar
+    sessions[chatId] = { step: 'confirm_delete_biz', bizId: b.id, bizName: b.name, userName: userName };
+    await tgSend(chatId, 'Estas seguro que queres borrar <b>' + b.name + '</b> y TODAS sus transacciones?\n\nResponde <b>si</b> para confirmar o <b>no</b> para cancelar.');
+    return;
+  }
+
+  // ── BORRAR TRANSACCIÓN ──
+  if (parsed.type === 'delete_tx') {
+    const idMatch = text.match(/\/borrar\s+(\d+)/);
+    const txId = idMatch ? parseInt(idMatch[1]) : null;
+    if (!txId) { await tgSend(chatId, 'Indica el ID. Usa /ultimas para ver los IDs.'); return; }
+    const tx = await pool.query('SELECT t.*,b.name as biz FROM transactions t JOIN businesses b ON b.id=t.business_id WHERE t.id=$1', [txId]);
+    if (!tx.rows.length) { await tgSend(chatId, 'No encontre la transaccion #' + txId); return; }
+    const t2 = tx.rows[0];
+    await pool.query('DELETE FROM transactions WHERE id=$1', [txId]);
+    await tgSend(chatId, 'Transaccion #' + txId + ' borrada.\n' + t2.biz + ' ' + (t2.type==='income'?'+':'-') + 'Q' + parseFloat(t2.amount).toFixed(2) + ' · ' + t2.description);
+    return;
+  }
+
+  // ── EDITAR TRANSACCIÓN ──
+  if (parsed.type === 'edit_tx') {
+    const parts = text.match(/\/editar\s+(\d+)\s+(monto|desc|descripcion)\s+(.+)/i);
+    if (!parts) {
+      await tgSend(chatId, 'Formato incorrecto.\n\nEjemplos:\n/editar 5 monto 300\n/editar 5 desc Venta de tacos');
+      return;
+    }
+    const txId  = parseInt(parts[1]);
+    const field = parts[2].toLowerCase();
+    const value = parts[3].trim();
+    const tx = await pool.query('SELECT * FROM transactions WHERE id=$1', [txId]);
+    if (!tx.rows.length) { await tgSend(chatId, 'No encontre la transaccion #' + txId); return; }
+    if (field === 'monto') {
+      const amount = parseFloat(value);
+      if (isNaN(amount)) { await tgSend(chatId, 'El monto debe ser un numero.'); return; }
+      await pool.query('UPDATE transactions SET amount=$1 WHERE id=$2', [amount, txId]);
+      await tgSend(chatId, 'Transaccion #' + txId + ' actualizada.\nNuevo monto: Q ' + amount.toFixed(2));
+    } else {
+      await pool.query('UPDATE transactions SET description=$1 WHERE id=$2', [value, txId]);
+      await tgSend(chatId, 'Transaccion #' + txId + ' actualizada.\nNueva descripcion: ' + value);
+    }
     return;
   }
 
@@ -743,6 +816,19 @@ async function handleSession(chatId, text, userName, msg) {
     let reply = rTg.ok ? 'Publicado en Telegram' : 'Error TG: ' + rTg.error;
     reply += '\n' + (rFb.ok ? 'Publicado en Facebook' : 'Error FB: ' + rFb.error);
     await tgSend(chatId, reply);
+    return;
+  }
+
+  // Confirmar borrar negocio
+  if (session.step === 'confirm_delete_biz') {
+    if (/^si$/i.test(text.trim())) {
+      await pool.query('DELETE FROM businesses WHERE id=$1', [session.bizId]);
+      delete sessions[chatId];
+      await tgSend(chatId, 'Negocio <b>' + session.bizName + '</b> y todas sus transacciones fueron borrados.');
+    } else {
+      delete sessions[chatId];
+      await tgSend(chatId, 'Cancelado. El negocio no fue borrado.');
+    }
     return;
   }
 
