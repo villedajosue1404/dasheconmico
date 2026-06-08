@@ -225,14 +225,27 @@ async function handleMessage(msg) {
   }
 
   // ── MODO CONVERSACIÓN CON IA ──
-  // Si el usuario tiene historial activo y el mensaje es corto o de seguimiento,
-  // continuar la conversación con la IA
   if (process.env.GROQ_API_KEY) {
     const history = getHistory(chatId);
-    const isFollowUp = history.length > 0 && (
-      text.length < 30 ||
-      /^(si|no|ok|claro|y|y\?|continua|mas|sigue|explica|por que|como|cuando|cuanto|cual|dale|aha|entiendo|perfecto|bien|gracias)$/i.test(text.trim())
+    // Si hay historial activo, cualquier mensaje que NO sea claramente una transacción
+    // va directo a la IA
+    const isClearTransaction = /^(vend|gast|pagu|compr|ingres|cobr)/i.test(text) &&
+                               /\d/.test(text) &&
+                               !text.includes('?') &&
+                               !text.includes('proyec') &&
+                               !text.includes('analiz') &&
+                               !text.includes('informe') &&
+                               !text.includes('cuanto') &&
+                               !text.includes('cuánto') &&
+                               !text.includes('como') &&
+                               !text.includes('cómo');
+
+    const isFollowUp = history.length > 0 && !isClearTransaction && (
+      text.length < 60 ||
+      /\?/.test(text) ||
+      /proyec|futuro|mes|año|semana|analiz|recomiend|deberia|podria|mejor|peor|comparar|informe|resumen|explica|por que|como|cuando|cuanto|cual|dale|aha|entiendo|perfecto|bien|gracias|si|no|ok|claro|continua|mas|sigue/i.test(text)
     );
+
     if (isFollowUp && !text.startsWith('/')) {
       const report = await generateReport(text, chatId);
       await tgSend(chatId, report);
