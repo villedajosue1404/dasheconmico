@@ -2,6 +2,7 @@ const fetch = require('node-fetch');
 const { pool } = require('./db/schema');
 const { publishToTelegram, publishToFacebook } = require('./scheduler');
 const { analyzeFinancialMessage, generateReport, generatePostText, getBusinessContext, addToHistory, getHistory, clearHistory } = require('./ai');
+const { generateImage } = require('./imagegen');
 
 // ── Enviar mensaje de texto al usuario del bot ──
 async function tgSend(chatId, text) {
@@ -152,6 +153,7 @@ function parseMessage(text) {
   if (isCmd(t, ['programados'])) return { type: 'list_scheduled' };
   if (isCmd(t, ['analizar', 'analisis', 'reporte'])) return { type: 'ai_report' };
   if (t.startsWith('/crear_post') || t.startsWith('crear post')) return { type: 'ai_post' };
+  if (t.startsWith('/imagen') || t.startsWith('imagen ')) return { type: 'gen_image' };
 
   // /ventas mes — ventas del mes actual
   if (isCmd(t, ['ventas','ingresos'])) return { type: 'sales_month' };
@@ -406,6 +408,36 @@ async function handleMessage(msg) {
     const prompt = text.replace(/analizar|analisis|reporte/gi,'').trim() || 'Dame un resumen general de mis negocios';
     const report = await generateReport(prompt, chatId);
     await tgSend(chatId, report);
+    return;
+  }
+
+  // ── GENERAR IMAGEN CON GOOGLE IMAGEN 3 ──
+  if (parsed.type === 'gen_image') {
+    const prompt = text.replace(/\/imagen|^imagen\s+/gi, '').trim();
+    if (!prompt) {
+      await tgSend(chatId, 'Decime que imagen queres crear.\n\nEjemplo:\n/imagen promo de tacos con fondo rojo y texto 2x1');
+      return;
+    }
+    await tgSend(chatId, 'Generando imagen... puede tardar unos segundos.');
+    // Mejorar el prompt para publicidades guatemaltecas
+    const fullPrompt = 'Professional advertisement image for a Guatemalan small business. ' + prompt + '. High quality, vibrant colors, modern design, commercial photography style.';
+    const result = await generateImage(fullPrompt);
+    if (!result.ok) {
+      await tgSend(chatId, 'Error generando imagen: ' + result.error);
+      return;
+    }
+    // Enviar imagen via Telegram
+    const token = await getConfig('tg_token');
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('chat_id', chatId.toString());
+    form.append('caption', 'Imagen generada para: ' + prompt);
+    form.append('photo', result.buffer, { filename: 'imagen.jpg', contentType: 'image/jpeg' });
+    await fetch('https://api.telegram.org/bot' + token + '/sendPhoto', {
+      method: 'POST',
+      body: form,
+      headers: form.getHeaders()
+    });
     return;
   }
 
