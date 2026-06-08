@@ -250,11 +250,11 @@ async function generatePDF(filter, aiAnalysis) {
     }
 
     // ── PIE DE PÁGINA ──
-    const pageCount = doc.bufferedPageRange().count;
-    for (let i = 0; i < pageCount; i++) {
-      doc.switchToPage(i);
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
       doc.fontSize(8).fillColor(COLORS.gray)
-         .text('Centro de Mando · Informe generado automáticamente · Página ' + (i+1) + ' de ' + pageCount,
+         .text('Centro de Mando · Informe generado automaticamente · Pagina ' + (i+1) + ' de ' + range.count,
                50, doc.page.height - 30, { align: 'center', width: doc.page.width - 100 });
     }
 
