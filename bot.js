@@ -1,7 +1,7 @@
 const fetch = require('node-fetch');
 const { pool } = require('./db/schema');
 const { publishToTelegram, publishToFacebook } = require('./scheduler');
-const { analyzeFinancialMessage, generateReport, generatePostText, getBusinessContext, addToHistory, getHistory, clearHistory } = require('./ai');
+const { analyzeFinancialMessage, generateReport, generatePostText, getBusinessContext, addToHistory, getHistory, clearHistory, detectIntent } = require('./ai');
 const { generateImage } = require('./imagegen');
 const { generatePDF, generateExcel } = require('./reports');
 
@@ -681,8 +681,72 @@ async function handleMessage(msg) {
         return;
       }
     }
-    // Si Groq está disponible, intentar responder con IA
+    // Intentar detectar intención de acción primero
     if (process.env.GROQ_API_KEY) {
+      const bizRes2 = await pool.query('SELECT id,name FROM businesses ORDER BY name');
+      const txRes2  = await pool.query(
+        'SELECT t.id,t.type,t.amount,t.description,b.name as business FROM transactions t ' +
+        'JOIN businesses b ON b.id=t.business_id ORDER BY t.created_at DESC LIMIT 10'
+      );
+      const intent = await detectIntent(text, bizRes2.rows, txRes2.rows);
+
+      if (intent) {
+        // Ejecutar la acción detectada
+        if (intent.intent === 'delete_business' && intent.business) {
+          const biz = await pool.query('SELECT id,name FROM businesses WHERE LOWER(name) LIKE LOWER($1)', ['%'+intent.business+'%']);
+          if (biz.rows.length) {
+            sessions[chatId] = { step: 'confirm_delete_biz', bizId: biz.rows[0].id, bizName: biz.rows[0].name, userName: userName };
+            await tgSend(chatId, 'Estas seguro que queres borrar <b>' + biz.rows[0].name + '</b> y TODAS sus transacciones?\n\nResponde <b>si</b> para confirmar o <b>no</b> para cancelar.');
+          } else {
+            await tgSend(chatId, 'No encontre un negocio llamado "' + intent.business + '".');
+          }
+          return;
+        }
+
+        if (intent.intent === 'delete_tx' && intent.id) {
+          const tx = await pool.query('SELECT t.*,b.name as biz FROM transactions t JOIN businesses b ON b.id=t.business_id WHERE t.id=$1', [intent.id]);
+          if (tx.rows.length) {
+            const t2 = tx.rows[0];
+            sessions[chatId] = { step: 'confirm_delete_tx', txId: intent.id, txDesc: t2.biz + ' Q' + parseFloat(t2.amount).toFixed(2) + ' ' + t2.description, userName: userName };
+            await tgSend(chatId, 'Confirmas borrar esta transaccion?\n\n' + t2.biz + ' · ' + (t2.type==='income'?'+':'-') + 'Q' + parseFloat(t2.amount).toFixed(2) + '\n' + t2.description + '\n\nResponde <b>si</b> o <b>no</b>.');
+          } else {
+            await tgSend(chatId, 'No encontre la transaccion #' + intent.id);
+          }
+          return;
+        }
+
+        if (intent.intent === 'edit_tx' && intent.id) {
+          const tx = await pool.query('SELECT * FROM transactions WHERE id=$1', [intent.id]);
+          if (tx.rows.length) {
+            if (intent.field === 'amount') {
+              const amt = parseFloat(intent.value);
+              await pool.query('UPDATE transactions SET amount=$1 WHERE id=$2', [amt, intent.id]);
+              await tgSend(chatId, 'Transaccion #' + intent.id + ' actualizada.\nNuevo monto: Q ' + amt.toFixed(2));
+            } else if (intent.field === 'description') {
+              await pool.query('UPDATE transactions SET description=$1 WHERE id=$2', [intent.value, intent.id]);
+              await tgSend(chatId, 'Transaccion #' + intent.id + ' actualizada.\nNueva descripcion: ' + intent.value);
+            }
+          } else {
+            await tgSend(chatId, 'No encontre la transaccion #' + intent.id);
+          }
+          return;
+        }
+
+        if (intent.intent === 'create_business' && intent.name) {
+          const existing = await pool.query('SELECT id FROM businesses WHERE LOWER(name)=LOWER($1)', [intent.name]);
+          if (existing.rows.length) {
+            await tgSend(chatId, 'Ya existe un negocio llamado ' + intent.name);
+          } else {
+            const colors = ['#6c5ce7','#00b894','#e17055','#0984e3','#fdcb6e'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            await pool.query('INSERT INTO businesses(name,category,color) VALUES($1,$2,$3)', [intent.name, 'General', color]);
+            await tgSend(chatId, 'Negocio <b>' + intent.name + '</b> creado.');
+          }
+          return;
+        }
+      }
+
+      // Sin intención de acción — responder con IA conversacional
       const report = await generateReport(text, chatId);
       await tgSend(chatId, report);
     } else {
@@ -823,6 +887,19 @@ async function handleSession(chatId, text, userName, msg) {
     let reply = rTg.ok ? 'Publicado en Telegram' : 'Error TG: ' + rTg.error;
     reply += '\n' + (rFb.ok ? 'Publicado en Facebook' : 'Error FB: ' + rFb.error);
     await tgSend(chatId, reply);
+    return;
+  }
+
+  // Confirmar borrar transaccion
+  if (session.step === 'confirm_delete_tx') {
+    if (/^si$/i.test(text.trim())) {
+      await pool.query('DELETE FROM transactions WHERE id=$1', [session.txId]);
+      delete sessions[chatId];
+      await tgSend(chatId, 'Transaccion borrada: ' + session.txDesc);
+    } else {
+      delete sessions[chatId];
+      await tgSend(chatId, 'Cancelado.');
+    }
     return;
   }
 

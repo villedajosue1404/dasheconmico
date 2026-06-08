@@ -137,6 +137,38 @@ async function generatePostText(prompt, businessName) {
   return result || null;
 }
 
+// ── Detectar intención de acción (borrar, editar, crear) ──
+async function detectIntent(message, businesses, recentTx) {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return null;
+
+  const bizNames = businesses.map(function(b) { return b.name; }).join(', ');
+  const txList = recentTx.slice(0,5).map(function(t) {
+    return '#' + t.id + ' ' + t.type + ' Q' + parseFloat(t.amount).toFixed(2) + ' ' + t.description + ' (' + t.business + ')';
+  }).join('\n');
+
+  const system = 'Sos un asistente que detecta intenciones en mensajes de negocios guatemaltecos. ' +
+    'Negocios disponibles: ' + bizNames + '. ' +
+    'Ultimas transacciones:\n' + txList + '\n' +
+    'Respondé SOLO con JSON sin texto extra ni markdown. ' +
+    'Intenciones posibles:\n' +
+    '{"intent":"delete_business","business":"nombre exacto"} - borrar negocio\n' +
+    '{"intent":"delete_tx","id":numero} - borrar transaccion por ID\n' +
+    '{"intent":"edit_tx","id":numero,"field":"amount|description","value":"nuevo valor"} - editar transaccion\n' +
+    '{"intent":"create_business","name":"nombre"} - crear negocio\n' +
+    '{"intent":"none"} - si no es una accion de modificacion';
+
+  const result = await askGroq(system, message, null);
+  if (!result) return null;
+  try {
+    const clean = result.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    return parsed.intent !== 'none' ? parsed : null;
+  } catch(e) {
+    return null;
+  }
+}
+
 module.exports = {
   analyzeFinancialMessage,
   generateReport,
@@ -144,5 +176,6 @@ module.exports = {
   getBusinessContext,
   addToHistory,
   getHistory,
-  clearHistory
+  clearHistory,
+  detectIntent
 };
