@@ -1,7 +1,7 @@
 const fetch = require('node-fetch');
 const { pool } = require('./db/schema');
 const { publishToTelegram, publishToFacebook } = require('./scheduler');
-const { analyzeFinancialMessage, generateReport, generatePostText, getBusinessContext } = require('./ai');
+const { analyzeFinancialMessage, generateReport, generatePostText, getBusinessContext, addToHistory, getHistory, clearHistory } = require('./ai');
 
 // ── Enviar mensaje de texto al usuario del bot ──
 async function tgSend(chatId, text) {
@@ -219,6 +219,27 @@ async function handleMessage(msg) {
     return;
   }
 
+  // ── MODO CONVERSACIÓN CON IA ──
+  // Si el usuario tiene historial activo y el mensaje es corto o de seguimiento,
+  // continuar la conversación con la IA
+  if (process.env.GROQ_API_KEY) {
+    const history = getHistory(chatId);
+    const isFollowUp = history.length > 0 && (
+      text.length < 30 ||
+      /^(si|no|ok|claro|y|y\?|continua|mas|sigue|explica|por que|como|cuando|cuanto|cual|dale|aha|entiendo|perfecto|bien|gracias)$/i.test(text.trim())
+    );
+    if (isFollowUp && !text.startsWith('/')) {
+      const report = await generateReport(text, chatId);
+      await tgSend(chatId, report);
+      return;
+    }
+  }
+
+  // Limpiar historial si el usuario usa un comando normal
+  if (text.startsWith('/') && text !== '/analizar') {
+    clearHistory(chatId);
+  }
+
   // ── PUBLICACIÓN CON FOTO ──
   // Si el usuario mandó una foto con caption
   if (photo && photo.length > 0) {
@@ -382,7 +403,8 @@ async function handleMessage(msg) {
   // ── REPORTE CON IA ──
   if (parsed.type === 'ai_report') {
     await tgSend(chatId, 'Analizando tus negocios...');
-    const report = await generateReport(text.replace(/analizar|analisis|reporte/gi,'').trim() || 'Dame un resumen general de mis negocios');
+    const prompt = text.replace(/analizar|analisis|reporte/gi,'').trim() || 'Dame un resumen general de mis negocios';
+    const report = await generateReport(prompt, chatId);
     await tgSend(chatId, report);
     return;
   }
@@ -483,7 +505,7 @@ async function handleMessage(msg) {
         return;
       } else if (aiResult && aiResult.type === 'query') {
         // La IA interpretó como consulta — generar reporte
-        const report = await generateReport(text);
+        const report = await generateReport(text, chatId);
         await tgSend(chatId, report);
         return;
       }

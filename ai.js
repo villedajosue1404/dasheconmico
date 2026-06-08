@@ -127,4 +127,4 @@ async function generatePostText(prompt, businessName) {
   return result || null;
 }
 
-module.exports = { analyzeFinancialMessage, generateReport, generatePostText, getBusinessContext };
+module.exports = { analyzeFinancialMessage, generateReport, generatePostText, getBusinessContext, addToHistory, getHistory, clearHistory };
