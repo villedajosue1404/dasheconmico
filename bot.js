@@ -3,6 +3,7 @@ const { pool } = require('./db/schema');
 const { publishToTelegram, publishToFacebook } = require('./scheduler');
 const { analyzeFinancialMessage, generateReport, generatePostText, getBusinessContext, addToHistory, getHistory, clearHistory } = require('./ai');
 const { generateImage } = require('./imagegen');
+const { generatePDF, generateExcel } = require('./reports');
 
 // ── Enviar mensaje de texto al usuario del bot ──
 async function tgSend(chatId, text) {
@@ -154,6 +155,8 @@ function parseMessage(text) {
   if (isCmd(t, ['analizar', 'analisis', 'reporte'])) return { type: 'ai_report' };
   if (t.startsWith('/crear_post') || t.startsWith('crear post')) return { type: 'ai_post' };
   if (t.startsWith('/imagen') || t.startsWith('imagen ')) return { type: 'gen_image' };
+  if (t.startsWith('/informe') || t.startsWith('/reporte')) return { type: 'report' };
+  if (t.startsWith('/excel')) return { type: 'excel' };
 
   // /ventas mes — ventas del mes actual
   if (isCmd(t, ['ventas','ingresos'])) return { type: 'sales_month' };
@@ -408,6 +411,49 @@ async function handleMessage(msg) {
     const prompt = text.replace(/analizar|analisis|reporte/gi,'').trim() || 'Dame un resumen general de mis negocios';
     const report = await generateReport(prompt, chatId);
     await tgSend(chatId, report);
+    return;
+  }
+
+  // ── GENERAR INFORME PDF ──
+  if (parsed.type === 'report') {
+    const filter = text.replace(/\/informe|\/reporte/gi,'').trim();
+    await tgSend(chatId, 'Generando informe PDF... un momento.');
+    try {
+      const aiText = await generateReport(filter || 'resumen ejecutivo del periodo', chatId);
+      const pdfBuffer = await generatePDF(filter, aiText);
+      const token = await getConfig('tg_token');
+      const FormData = require('form-data');
+      const form = new FormData();
+      form.append('chat_id', chatId.toString());
+      form.append('caption', 'Informe ' + (filter || 'general'));
+      form.append('document', pdfBuffer, { filename: 'informe.pdf', contentType: 'application/pdf' });
+      await fetch('https://api.telegram.org/bot' + token + '/sendDocument', {
+        method: 'POST', body: form, headers: form.getHeaders()
+      });
+    } catch(e) {
+      await tgSend(chatId, 'Error generando PDF: ' + e.message);
+    }
+    return;
+  }
+
+  // ── GENERAR EXCEL ──
+  if (parsed.type === 'excel') {
+    const filter = text.replace(/\/excel/gi,'').trim();
+    await tgSend(chatId, 'Generando Excel... un momento.');
+    try {
+      const excelBuffer = await generateExcel(filter);
+      const token = await getConfig('tg_token');
+      const FormData = require('form-data');
+      const form = new FormData();
+      form.append('chat_id', chatId.toString());
+      form.append('caption', 'Reporte Excel ' + (filter || 'general'));
+      form.append('document', excelBuffer, { filename: 'reporte.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      await fetch('https://api.telegram.org/bot' + token + '/sendDocument', {
+        method: 'POST', body: form, headers: form.getHeaders()
+      });
+    } catch(e) {
+      await tgSend(chatId, 'Error generando Excel: ' + e.message);
+    }
     return;
   }
 
