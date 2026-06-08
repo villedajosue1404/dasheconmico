@@ -1,38 +1,34 @@
 // ============================================================
-// IMAGEGEN.JS — Generación de imágenes con Google Imagen 3
+// IMAGEGEN.JS — Generación de imágenes con Hugging Face
+// Modelo: FLUX.1-schnell (gratis, buena calidad)
 // ============================================================
 
 const fetch = require('node-fetch');
 
 async function generateImage(prompt) {
-  const key = process.env.GOOGLE_API_KEY;
-  if (!key) return { ok: false, error: 'GOOGLE_API_KEY no configurada' };
+  const key = process.env.HF_API_KEY;
+  if (!key) return { ok: false, error: 'HF_API_KEY no configurada' };
 
   try {
     const res = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=' + key,
+      'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instances: [{ prompt: prompt }],
-          parameters: {
-            sampleCount: 1,
-            aspectRatio: '1:1',
-            safetyFilterLevel: 'block_few'
-          }
-        })
+        headers: {
+          'Authorization': 'Bearer ' + key,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ inputs: prompt })
       }
     );
 
-    const data = await res.json();
+    if (!res.ok) {
+      const err = await res.json();
+      return { ok: false, error: err.error || 'Error ' + res.status };
+    }
 
-    if (data.error) return { ok: false, error: data.error.message };
-    if (!data.predictions || !data.predictions[0]) return { ok: false, error: 'Sin resultado' };
-
-    // La imagen viene en base64
-    const base64 = data.predictions[0].bytesBase64Encoded;
-    const buffer = Buffer.from(base64, 'base64');
+    // Hugging Face devuelve la imagen directo como blob
+    const buffer = await res.buffer();
     return { ok: true, buffer: buffer };
 
   } catch(e) {
