@@ -159,8 +159,9 @@ function parseMessage(text) {
   if (t.startsWith('/excel')) return { type: 'excel' };
   if (isCmd(t, ['ultimas', 'ultimos', 'recientes'])) return { type: 'last_tx' };
   if (t.startsWith('/borrar negocio')) return { type: 'delete_business' };
-  if (t.match(/^\/borrar\s+\d+/)) return { type: 'delete_tx' };
-  if (t.match(/^\/editar\s+\d+/)) return { type: 'edit_tx' };
+  if (t.startsWith('/borrar') && t.match(/\/borrar\s+\d+/)) return { type: 'delete_tx' };
+  if (t.startsWith('/borrar') && !t.includes('negocio')) return { type: 'delete_tx_help' };
+  if (t.match(/\/editar\s+\d+/)) return { type: 'edit_tx' };
 
   // /ventas mes — ventas del mes actual
   if (isCmd(t, ['ventas','ingresos'])) return { type: 'sales_month' };
@@ -447,6 +448,12 @@ async function handleMessage(msg) {
     });
     reply += 'Para borrar: /borrar [id]\nPara editar: /editar [id] monto 500\nPara editar descripcion: /editar [id] desc nueva descripcion';
     await tgSend(chatId, reply);
+    return;
+  }
+
+  // ── AYUDA BORRAR ──
+  if (parsed.type === 'delete_tx_help') {
+    await tgSend(chatId, 'Para borrar necesitas el ID de la transaccion.\n\nPrimero usa /ultimas para ver los IDs, luego:\n/borrar [id]\n\nEjemplo: /borrar 5\n\nPara borrar un negocio completo:\n/borrar negocio Nombre');
     return;
   }
 
