@@ -10,7 +10,7 @@ async function generateImage(prompt) {
 
   try {
     const res = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=' + key,
+      'https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=' + key,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
