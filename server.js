@@ -3,7 +3,7 @@ const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
 const { initDB }                    = require('./db/schema');
-const { setupBot, registerWebhook } = require('./bot');
+const { setupBot, registerWebhook } = require('./bot_v2');
 const { startScheduler }            = require('./scheduler');
 
 const app  = express();
