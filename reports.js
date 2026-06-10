@@ -1,302 +1,370 @@
 // ============================================================
-// REPORTS.JS — Generación de PDF y Excel profesionales
+// REPORTS.JS — PDF con LaTeX (lualatex) + Excel con ExcelJS
+// PDF profesional estilo académico, filtrado por negocio
 // ============================================================
 
-const PDFDocument = require('pdfkit');
-const ExcelJS     = require('exceljs');
-const { pool }    = require('./db/schema');
-const { generateReport } = require('./ai');
+const { execSync }  = require('child_process');
+const fs            = require('fs');
+const os            = require('os');
+const path          = require('path');
+const ExcelJS       = require('exceljs');
+const { pool }      = require('./db/schema');
 
-// ── Colores y estilos ──
-const COLORS = {
-  primary:   '#1a1a2e',
-  accent:    '#6c5ce7',
-  green:     '#00b894',
-  red:       '#e17055',
-  gray:      '#636e72',
-  lightGray: '#dfe6e9',
-  white:     '#ffffff'
-};
+// ── Escapa caracteres especiales de LaTeX ──
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/\\/g, '\\textbackslash{}')
+    .replace(/&/g, '\\&')
+    .replace(/%/g, '\\%')
+    .replace(/\$/g, '\\$')
+    .replace(/#/g, '\\#')
+    .replace(/_/g, '\\_')
+    .replace(/\{/g, '\\{')
+    .replace(/\}/g, '\\}')
+    .replace(/~/g, '\\textasciitilde{}')
+    .replace(/\^/g, '\\textasciicircum{}');
+}
 
-// ── Obtener datos para el informe ──
-async function getReportData(filter) {
+function fmtQ(n) {
+  return 'Q\\,' + parseFloat(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '{,}');
+}
+
+// ── Parsear período y detectar negocio específico en el filtro ──
+function parseFilter(filter) {
   const f = (filter || '').toLowerCase();
+  const now = new Date();
 
-  // Determinar rango de fechas
-  const now   = new Date();
+  // Detectar nombre de negocio en el filtro (ej: "skittes junio")
+  let businessHint = null;
+  const bizMatch = f.match(/(?:de|para|negocio|empresa)?\s*([a-záéíóúñ]{3,})\s*(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|semana|mes|año|hoy|ayer|$)/i);
+  if (bizMatch) {
+    const candidate = bizMatch[1].trim();
+    // Ignorar palabras que son períodos o artículos
+    const skipWords = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
+                       'septiembre','octubre','noviembre','diciembre','semana','mes','año',
+                       'hoy','ayer','todo','todos','general','resumen','informe','reporte'];
+    if (!skipWords.includes(candidate)) businessHint = candidate;
+  }
+
   let dateFrom, dateTo, periodLabel;
 
-  if (/enero|january/.test(f))   { dateFrom='2026-01-01'; dateTo='2026-01-31'; periodLabel='Enero 2026'; }
-  else if (/febrero|february/.test(f)) { dateFrom='2026-02-01'; dateTo='2026-02-28'; periodLabel='Febrero 2026'; }
-  else if (/marzo|march/.test(f))      { dateFrom='2026-03-01'; dateTo='2026-03-31'; periodLabel='Marzo 2026'; }
-  else if (/abril|april/.test(f))      { dateFrom='2026-04-01'; dateTo='2026-04-30'; periodLabel='Abril 2026'; }
-  else if (/mayo|may/.test(f))         { dateFrom='2026-05-01'; dateTo='2026-05-31'; periodLabel='Mayo 2026'; }
-  else if (/junio|june/.test(f))       { dateFrom='2026-06-01'; dateTo='2026-06-30'; periodLabel='Junio 2026'; }
+  if (/enero|january/.test(f))          { dateFrom=`${now.getFullYear()}-01-01`; dateTo=`${now.getFullYear()}-01-31`; periodLabel='Enero '+now.getFullYear(); }
+  else if (/febrero|february/.test(f))  { dateFrom=`${now.getFullYear()}-02-01`; dateTo=`${now.getFullYear()}-02-28`; periodLabel='Febrero '+now.getFullYear(); }
+  else if (/marzo|march/.test(f))       { dateFrom=`${now.getFullYear()}-03-01`; dateTo=`${now.getFullYear()}-03-31`; periodLabel='Marzo '+now.getFullYear(); }
+  else if (/abril|april/.test(f))       { dateFrom=`${now.getFullYear()}-04-01`; dateTo=`${now.getFullYear()}-04-30`; periodLabel='Abril '+now.getFullYear(); }
+  else if (/mayo|may/.test(f))          { dateFrom=`${now.getFullYear()}-05-01`; dateTo=`${now.getFullYear()}-05-31`; periodLabel='Mayo '+now.getFullYear(); }
+  else if (/junio|june/.test(f))        { dateFrom=`${now.getFullYear()}-06-01`; dateTo=`${now.getFullYear()}-06-30`; periodLabel='Junio '+now.getFullYear(); }
+  else if (/julio|july/.test(f))        { dateFrom=`${now.getFullYear()}-07-01`; dateTo=`${now.getFullYear()}-07-31`; periodLabel='Julio '+now.getFullYear(); }
+  else if (/agosto|august/.test(f))     { dateFrom=`${now.getFullYear()}-08-01`; dateTo=`${now.getFullYear()}-08-31`; periodLabel='Agosto '+now.getFullYear(); }
+  else if (/septiembre|september/.test(f)){ dateFrom=`${now.getFullYear()}-09-01`; dateTo=`${now.getFullYear()}-09-30`; periodLabel='Septiembre '+now.getFullYear(); }
+  else if (/octubre|october/.test(f))   { dateFrom=`${now.getFullYear()}-10-01`; dateTo=`${now.getFullYear()}-10-31`; periodLabel='Octubre '+now.getFullYear(); }
+  else if (/noviembre|november/.test(f)){ dateFrom=`${now.getFullYear()}-11-01`; dateTo=`${now.getFullYear()}-11-30`; periodLabel='Noviembre '+now.getFullYear(); }
+  else if (/diciembre|december/.test(f)){ dateFrom=`${now.getFullYear()}-12-01`; dateTo=`${now.getFullYear()}-12-31`; periodLabel='Diciembre '+now.getFullYear(); }
   else if (/semana|week/.test(f)) {
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - now.getDay() + 1);
-    dateFrom = monday.toISOString().split('T')[0];
-    dateTo   = now.toISOString().split('T')[0];
+    const mon = new Date(now); mon.setDate(now.getDate() - now.getDay() + 1);
+    dateFrom = mon.toISOString().split('T')[0]; dateTo = now.toISOString().split('T')[0];
     periodLabel = 'Esta semana';
   } else if (/ayer|yesterday/.test(f)) {
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    dateFrom = dateTo = yesterday.toISOString().split('T')[0];
-    periodLabel = 'Ayer';
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    dateFrom = dateTo = y.toISOString().split('T')[0]; periodLabel = 'Ayer';
   } else if (/hoy|today/.test(f)) {
-    dateFrom = dateTo = now.toISOString().split('T')[0];
-    periodLabel = 'Hoy';
+    dateFrom = dateTo = now.toISOString().split('T')[0]; periodLabel = 'Hoy';
   } else {
-    // Por defecto: mes actual
-    const year  = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    dateFrom    = year + '-' + month + '-01';
-    dateTo      = now.toISOString().split('T')[0];
+    const yr = now.getFullYear(); const mo = String(now.getMonth() + 1).padStart(2, '0');
+    dateFrom = `${yr}-${mo}-01`; dateTo = now.toISOString().split('T')[0];
     periodLabel = 'Mes actual';
   }
 
-  // Negocios con totales
+  return { dateFrom, dateTo, periodLabel, businessHint };
+}
+
+// ── Obtener datos del período, opcionalmente filtrado por negocio ──
+async function getReportData(filter) {
+  const { dateFrom, dateTo, periodLabel, businessHint } = parseFilter(filter);
+
+  // Si hay hint de negocio, buscar coincidencia en DB
+  let businessFilter = null;
+  if (businessHint) {
+    const bizSearch = await pool.query(
+      'SELECT id, name FROM businesses WHERE LOWER(name) LIKE LOWER($1) LIMIT 1',
+      [`%${businessHint}%`]
+    );
+    if (bizSearch.rows.length) businessFilter = bizSearch.rows[0];
+  }
+
+  // Query negocios — si hay filtro solo ese negocio
+  const bizWhere = businessFilter ? 'AND b.id = $3' : '';
+  const bizParams = businessFilter ? [dateFrom, dateTo, businessFilter.id] : [dateFrom, dateTo];
+
   const bizQ = await pool.query(
-    'SELECT b.id, b.name, b.color,' +
-    'COALESCE(SUM(CASE WHEN t.type=\'income\' AND (t.date BETWEEN $1 AND $2) THEN t.amount ELSE 0 END),0) as income,' +
-    'COALESCE(SUM(CASE WHEN t.type=\'expense\' AND (t.date BETWEEN $1 AND $2) THEN t.amount ELSE 0 END),0) as expense,' +
-    'COALESCE(SUM(CASE WHEN t.type=\'income\' AND (t.date BETWEEN $1 AND $2) THEN t.amount WHEN t.type=\'expense\' AND (t.date BETWEEN $1 AND $2) THEN -t.amount ELSE 0 END),0) as balance,' +
-    'COUNT(CASE WHEN t.date BETWEEN $1 AND $2 THEN 1 END) as tx_count ' +
-    'FROM businesses b LEFT JOIN transactions t ON t.business_id=b.id ' +
-    'GROUP BY b.id,b.name,b.color ORDER BY balance DESC',
-    [dateFrom, dateTo]
+    `SELECT b.id, b.name, b.color,
+      COALESCE(SUM(CASE WHEN t.type='income' AND t.date BETWEEN $1 AND $2 THEN t.amount ELSE 0 END),0) AS income,
+      COALESCE(SUM(CASE WHEN t.type='expense' AND t.date BETWEEN $1 AND $2 THEN t.amount ELSE 0 END),0) AS expense,
+      COALESCE(SUM(CASE WHEN t.type='income' AND t.date BETWEEN $1 AND $2 THEN t.amount
+                        WHEN t.type='expense' AND t.date BETWEEN $1 AND $2 THEN -t.amount ELSE 0 END),0) AS balance,
+      COUNT(CASE WHEN t.date BETWEEN $1 AND $2 THEN 1 END) AS tx_count
+    FROM businesses b LEFT JOIN transactions t ON t.business_id = b.id
+    WHERE 1=1 ${bizWhere}
+    GROUP BY b.id, b.name, b.color ORDER BY balance DESC`,
+    bizParams
   );
 
-  // Transacciones del período
+  // Query transacciones
+  const txWhere = businessFilter ? 'AND t.business_id = $3' : '';
+  const txParams = businessFilter ? [dateFrom, dateTo, businessFilter.id] : [dateFrom, dateTo];
   const txQ = await pool.query(
-    'SELECT t.date,t.type,t.amount,t.description,t.category,b.name as business ' +
-    'FROM transactions t JOIN businesses b ON b.id=t.business_id ' +
-    'WHERE t.date BETWEEN $1 AND $2 ' +
-    'ORDER BY t.date DESC, t.created_at DESC',
-    [dateFrom, dateTo]
+    `SELECT t.date, t.type, t.amount, t.description, t.category, b.name AS business
+     FROM transactions t JOIN businesses b ON b.id = t.business_id
+     WHERE t.date BETWEEN $1 AND $2 ${txWhere}
+     ORDER BY t.date DESC, t.created_at DESC`,
+    txParams
   );
+
+  const totalIncome  = bizQ.rows.reduce((s, b) => s + parseFloat(b.income),  0);
+  const totalExpense = bizQ.rows.reduce((s, b) => s + parseFloat(b.expense), 0);
+  const totalBalance = bizQ.rows.reduce((s, b) => s + parseFloat(b.balance), 0);
 
   return {
-    period: periodLabel,
-    dateFrom: dateFrom,
-    dateTo: dateTo,
+    period: businessFilter ? `${periodLabel} — ${businessFilter.name}` : periodLabel,
+    dateFrom, dateTo,
     businesses: bizQ.rows,
     transactions: txQ.rows,
-    totalIncome:  bizQ.rows.reduce(function(s,b) { return s + parseFloat(b.income); }, 0),
-    totalExpense: bizQ.rows.reduce(function(s,b) { return s + parseFloat(b.expense); }, 0),
-    totalBalance: bizQ.rows.reduce(function(s,b) { return s + parseFloat(b.balance); }, 0)
+    totalIncome, totalExpense, totalBalance,
+    singleBusiness: businessFilter ? businessFilter.name : null
   };
 }
 
-// ── Generar PDF profesional ──
-async function generatePDF(filter, aiAnalysis) {
-  const data = await getReportData(filter);
-  const doc  = new PDFDocument({ margin: 50, size: 'A4' });
-  const chunks = [];
+// ── Generar el .tex del informe ──
+function buildTex(data, aiAnalysis) {
+  const genDate = new Date().toLocaleDateString('es-GT');
+  const balColor = data.totalBalance >= 0 ? 'colorgreen' : 'colorred';
 
-  doc.on('data', function(chunk) { chunks.push(chunk); });
+  // Tabla de negocios
+  const bizRows = data.businesses.map(b => {
+    const bal = parseFloat(b.balance);
+    const balCol = bal >= 0 ? 'colorgreen' : 'colorred';
+    return `  \\textbf{${esc(b.name)}} & ${esc(fmtQ(b.income))} & ${esc(fmtQ(b.expense))} & {\\color{${balCol}}\\textbf{${esc(fmtQ(bal))}}} & ${b.tx_count} \\\\`;
+  }).join('\n');
 
-  return new Promise(function(resolve, reject) {
-    doc.on('end', function() { resolve(Buffer.concat(chunks)); });
-    doc.on('error', reject);
+  // Tabla de transacciones (máx 50)
+  const txRows = data.transactions.slice(0, 50).map(t => {
+    const isInc = t.type === 'income';
+    const amtColor = isInc ? 'colorgreen' : 'colorred';
+    const sign = isInc ? '+' : '-';
+    const dateStr = t.date ? String(t.date).slice(0, 10) : '';
+    const desc = esc(t.description || t.category || '—').slice(0, 45);
+    return `  ${esc(dateStr)} & ${esc(t.business)} & ${isInc ? 'Ingreso' : 'Gasto'} & ${desc} & {\\color{${amtColor}}${sign}${esc(fmtQ(t.amount))}} \\\\`;
+  }).join('\n');
 
-    // ── PORTADA ──
-    // Fondo oscuro en header
-    doc.rect(0, 0, doc.page.width, 140).fill(COLORS.primary);
+  // Análisis IA
+  const aiSection = aiAnalysis ? `
+\\section*{Análisis Inteligente}
+\\begin{tcolorbox}[colback=accentbg,colframe=accent,title={\\faRobot\\quad Generado por IA -- Centro de Mando}]
+${esc(aiAnalysis)}
+\\end{tcolorbox}
+` : '';
 
-    // Logo/título
-    doc.fontSize(28).fillColor(COLORS.white).font('Helvetica-Bold')
-       .text('CENTRO DE MANDO', 50, 45, { align: 'center' });
-    doc.fontSize(13).fillColor('#a29bfe').font('Helvetica')
-       .text('Informe Financiero — ' + data.period, 50, 82, { align: 'center' });
-    doc.fontSize(10).fillColor('#b2bec3')
-       .text('Generado el ' + new Date().toLocaleDateString('es-GT') + ' · ' + data.dateFrom + ' al ' + data.dateTo,
-             50, 108, { align: 'center' });
+  const txSection = data.transactions.length > 0 ? `
+\\newpage
+\\section*{Transacciones del Período}
 
-    // Línea decorativa
-    doc.moveDown(4);
-    doc.moveTo(50, 155).lineTo(doc.page.width - 50, 155).strokeColor(COLORS.accent).lineWidth(2).stroke();
+\\begin{longtable}{p{2cm}p{3cm}p{1.8cm}p{5.5cm}r}
+\\toprule
+\\rowcolor{darkbg}
+\\color{white}\\textbf{Fecha} & \\color{white}\\textbf{Negocio} & \\color{white}\\textbf{Tipo} & \\color{white}\\textbf{Descripción} & \\color{white}\\textbf{Monto} \\\\
+\\midrule
+\\endhead
+${txRows}
+\\bottomrule
+\\end{longtable}
+` : '';
 
-    // ── RESUMEN EJECUTIVO ──
-    doc.moveDown(1);
-    doc.fontSize(14).fillColor(COLORS.primary).font('Helvetica-Bold')
-       .text('RESUMEN EJECUTIVO', 50, 175);
-    doc.moveDown(0.5);
+  return `\\documentclass[11pt,a4paper]{article}
+\\usepackage{fontspec}
+\\usepackage{xcolor}
+\\usepackage{geometry}
+\\usepackage{booktabs}
+\\usepackage{longtable}
+\\usepackage{colortbl}
+\\usepackage{tabularx}
+\\usepackage{tcolorbox}
+\\usepackage{titlesec}
+\\usepackage{parskip}
+\\usepackage{fancyhdr}
+\\usepackage{graphicx}
+\\usepackage{array}
 
-    // Tarjetas de métricas
-    const cardY   = 205;
-    const cardW   = 155;
-    const cardGap = 15;
+\\geometry{top=2cm,bottom=2.5cm,left=2.5cm,right=2.5cm}
+\\setmainfont{DejaVu Sans}
 
-    function drawCard(x, y, w, label, value, color) {
-      doc.roundedRect(x, y, w, 65, 6).fill(color + '15').stroke(color + '60');
-      doc.fontSize(9).fillColor(COLORS.gray).font('Helvetica')
-         .text(label.toUpperCase(), x + 10, y + 12, { width: w - 20 });
-      doc.fontSize(18).fillColor(color).font('Helvetica-Bold')
-         .text('Q ' + parseFloat(value).toLocaleString('es-GT', {minimumFractionDigits:2, maximumFractionDigits:2}),
-               x + 10, y + 28, { width: w - 20 });
-    }
+% Colores
+\\definecolor{accent}{HTML}{6C5CE7}
+\\definecolor{accentbg}{HTML}{EDE9FF}
+\\definecolor{colorgreen}{HTML}{00875A}
+\\definecolor{colorred}{HTML}{C0392B}
+\\definecolor{darkbg}{HTML}{1A1A2E}
+\\definecolor{lightgray}{HTML}{F4F4F8}
+\\definecolor{medgray}{HTML}{888899}
 
-    drawCard(50,              cardY, cardW, 'Total Ingresos',  data.totalIncome,  COLORS.green);
-    drawCard(50 + cardW + cardGap, cardY, cardW, 'Total Gastos', data.totalExpense, COLORS.red);
-    drawCard(50 + (cardW + cardGap) * 2, cardY, cardW, 'Balance Neto', data.totalBalance,
-             data.totalBalance >= 0 ? COLORS.accent : COLORS.red);
+% Encabezado y pie
+\\pagestyle{fancy}
+\\fancyhf{}
+\\renewcommand{\\headrulewidth}{0pt}
+\\fancyhead[L]{\\small\\color{medgray} Centro de Mando}
+\\fancyhead[R]{\\small\\color{medgray} ${esc(data.period)}}
+\\fancyfoot[C]{\\small\\color{medgray} Página \\thepage}
 
-    // ── POR NEGOCIO ──
-    doc.moveDown(1);
-    const bizY = cardY + 90;
-    doc.fontSize(14).fillColor(COLORS.primary).font('Helvetica-Bold')
-       .text('DETALLE POR NEGOCIO', 50, bizY);
+% Títulos de sección
+\\titleformat{\\section*}{\\Large\\bfseries\\color{darkbg}}{}{0em}{}[\\color{accent}\\titlerule]
 
-    // Tabla
-    const tableY   = bizY + 25;
-    const colWidths = [180, 100, 100, 100];
-    const headers   = ['Negocio', 'Ingresos', 'Gastos', 'Balance'];
-    const tableW    = colWidths.reduce(function(a,b){return a+b;},0);
+\\tcbuselibrary{skins,breakable}
 
-    // Header de tabla
-    doc.rect(50, tableY, tableW, 24).fill(COLORS.primary);
-    let cx = 50;
-    headers.forEach(function(h, i) {
-      doc.fontSize(9).fillColor(COLORS.white).font('Helvetica-Bold')
-         .text(h, cx + 6, tableY + 8, { width: colWidths[i] - 12, align: i > 0 ? 'right' : 'left' });
-      cx += colWidths[i];
-    });
+\\begin{document}
 
-    // Filas
-    data.businesses.forEach(function(b, idx) {
-      const rowY = tableY + 24 + idx * 28;
-      if (idx % 2 === 0) doc.rect(50, rowY, tableW, 28).fill('#f8f9fa');
-      doc.rect(50, rowY, tableW, 28).stroke(COLORS.lightGray);
+% ── PORTADA ──────────────────────────────────────────────────
+\\begin{center}
+  \\colorbox{darkbg}{\\parbox{\\textwidth}{
+    \\vspace{12pt}
+    \\centering
+    {\\fontsize{26}{30}\\selectfont\\bfseries\\color{accent} Centro de Mando}\\\\[6pt]
+    {\\large\\color{white} Informe Financiero}\\\\[4pt]
+    {\\normalsize\\color{medgray} ${esc(data.period)}}\\\\[6pt]
+    {\\small\\color{medgray} Generado el ${esc(genDate)} $\\cdot$ ${esc(data.dateFrom)} al ${esc(data.dateTo)}}\\\\[12pt]
+  }}
+\\end{center}
 
-      // Indicador de color del negocio
-      doc.rect(50, rowY, 4, 28).fill(b.color || COLORS.accent);
+\\vspace{16pt}
 
-      const bal = parseFloat(b.balance);
-      cx = 50;
-      const vals = [
-        b.name,
-        'Q ' + parseFloat(b.income).toFixed(2),
-        'Q ' + parseFloat(b.expense).toFixed(2),
-        'Q ' + bal.toFixed(2)
-      ];
-      vals.forEach(function(v, i) {
-        const color = i === 3 ? (bal >= 0 ? COLORS.green : COLORS.red) : COLORS.primary;
-        doc.fontSize(9).fillColor(color).font(i === 3 ? 'Helvetica-Bold' : 'Helvetica')
-           .text(v, cx + 8, rowY + 10, { width: colWidths[i] - 16, align: i > 0 ? 'right' : 'left' });
-        cx += colWidths[i];
-      });
-    });
+% ── MÉTRICAS PRINCIPALES ──────────────────────────────────────
+\\section*{Resumen Ejecutivo}
 
-    // ── ANÁLISIS IA ──
-    const analysisY = tableY + 24 + data.businesses.length * 28 + 20;
-    if (aiAnalysis && doc.y < 650) {
-      doc.addPage();
-      doc.rect(0, 0, doc.page.width, 60).fill(COLORS.primary);
-      doc.fontSize(16).fillColor(COLORS.white).font('Helvetica-Bold')
-         .text('ANÁLISIS INTELIGENTE', 50, 22, { align: 'center' });
+\\begin{tabular}{p{4.5cm}p{4.5cm}p{4.5cm}}
+\\cellcolor{green!12}\\textbf{\\color{colorgreen}Total Ingresos} &
+\\cellcolor{red!12}\\textbf{\\color{colorred}Total Gastos} &
+\\cellcolor{accentbg}\\textbf{\\color{accent}Balance Neto} \\\\[4pt]
+\\cellcolor{green!12}{\\LARGE\\color{colorgreen} ${esc(fmtQ(data.totalIncome))}} &
+\\cellcolor{red!12}{\\LARGE\\color{colorred} ${esc(fmtQ(data.totalExpense))}} &
+\\cellcolor{accentbg}{\\LARGE\\color{${balColor}} ${esc(fmtQ(data.totalBalance))}} \\\\[6pt]
+\\end{tabular}
 
-      doc.moveDown(1);
-      doc.roundedRect(50, 80, doc.page.width - 100, 20).fill(COLORS.accent + '20');
-      doc.fontSize(9).fillColor(COLORS.gray).font('Helvetica-Bold')
-         .text('GENERADO POR IA — CENTRO DE MANDO', 50, 86, { align: 'center' });
+\\vspace{18pt}
 
-      doc.fontSize(11).fillColor(COLORS.primary).font('Helvetica')
-         .text(aiAnalysis, 50, 115, { width: doc.page.width - 100, lineGap: 4 });
-    }
+% ── DETALLE POR NEGOCIO ───────────────────────────────────────
+\\section*{Detalle por Negocio}
 
-    // ── TRANSACCIONES DETALLADAS ──
-    if (data.transactions.length > 0) {
-      doc.addPage();
-      doc.rect(0, 0, doc.page.width, 60).fill(COLORS.primary);
-      doc.fontSize(16).fillColor(COLORS.white).font('Helvetica-Bold')
-         .text('TRANSACCIONES DETALLADAS', 50, 22, { align: 'center' });
+\\begin{tabular}{lrrrr}
+\\toprule
+\\rowcolor{darkbg}
+\\color{white}\\textbf{Negocio} & \\color{white}\\textbf{Ingresos} & \\color{white}\\textbf{Gastos} & \\color{white}\\textbf{Balance} & \\color{white}\\textbf{Movimientos} \\\\
+\\midrule
+${bizRows}
+\\midrule
+\\textbf{TOTAL} & \\textbf{${esc(fmtQ(data.totalIncome))}} & \\textbf{${esc(fmtQ(data.totalExpense))}} & {\\color{${balColor}}\\textbf{${esc(fmtQ(data.totalBalance))}}} & \\textbf{${data.transactions.length}} \\\\
+\\bottomrule
+\\end{tabular}
 
-      const txCols = [70, 60, 90, 220, 100];
-      const txHeaders = ['Fecha', 'Tipo', 'Negocio', 'Descripción', 'Monto'];
-      const txTableW  = txCols.reduce(function(a,b){return a+b;},0);
+${aiSection}
+${txSection}
 
-      doc.rect(50, 80, txTableW, 22).fill(COLORS.primary);
-      cx = 50;
-      txHeaders.forEach(function(h, i) {
-        doc.fontSize(8).fillColor(COLORS.white).font('Helvetica-Bold')
-           .text(h, cx + 4, 87, { width: txCols[i] - 8, align: i === 4 ? 'right' : 'left' });
-        cx += txCols[i];
-      });
-
-      data.transactions.slice(0, 40).forEach(function(t, idx) {
-        const rowY = 102 + idx * 22;
-        if (rowY > 750) return;
-        if (idx % 2 === 0) doc.rect(50, rowY, txTableW, 22).fill('#f8f9fa');
-        doc.rect(50, rowY, txTableW, 22).stroke(COLORS.lightGray);
-
-        const isIncome = t.type === 'income';
-        cx = 50;
-        const txVals = [
-          t.date,
-          isIncome ? 'Ingreso' : 'Gasto',
-          t.business,
-          t.description || t.category || '',
-          (isIncome ? '+' : '-') + 'Q ' + parseFloat(t.amount).toFixed(2)
-        ];
-        txVals.forEach(function(v, i) {
-          const color = i === 4 ? (isIncome ? COLORS.green : COLORS.red) : COLORS.primary;
-          doc.fontSize(8).fillColor(color).font(i === 4 ? 'Helvetica-Bold' : 'Helvetica')
-             .text(String(v).slice(0, 35), cx + 4, rowY + 7,
-                   { width: txCols[i] - 8, align: i === 4 ? 'right' : 'left' });
-          cx += txCols[i];
-        });
-      });
-    }
-
-    // ── PIE DE PÁGINA ──
-    const range = doc.bufferedPageRange();
-    for (let i = 0; i < range.count; i++) {
-      doc.switchToPage(range.start + i);
-      doc.fontSize(8).fillColor(COLORS.gray)
-         .text('Centro de Mando · Informe generado automaticamente · Pagina ' + (i+1) + ' de ' + range.count,
-               50, doc.page.height - 30, { align: 'center', width: doc.page.width - 100 });
-    }
-
-    doc.end();
-  });
+\\end{document}`;
 }
 
-// ── Generar Excel profesional ──
+// ── Compilar LaTeX → PDF buffer ──
+async function compileTex(texSource) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmd-report-'));
+  const texFile = path.join(tmpDir, 'report.tex');
+  const pdfFile = path.join(tmpDir, 'report.pdf');
+
+  try {
+    fs.writeFileSync(texFile, texSource, 'utf8');
+    // Dos pasadas para referencias cruzadas
+    const cmd = `xelatex -interaction=nonstopmode -output-directory="${tmpDir}" "${texFile}"`;
+    execSync(cmd, { timeout: 90000, stdio: 'pipe' });
+    execSync(cmd, { timeout: 90000, stdio: 'pipe' });
+
+    if (!fs.existsSync(pdfFile)) throw new Error('PDF no generado por lualatex');
+    const buf = fs.readFileSync(pdfFile);
+    return buf;
+  } finally {
+    // Limpiar archivos temporales
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch(e) {}
+  }
+}
+
+// ── generatePDF: entrada pública ──
+async function generatePDF(filter, aiAnalysis) {
+  const data = await getReportData(filter);
+  const tex  = buildTex(data, aiAnalysis);
+  return await compileTex(tex);
+}
+
+// ── generateExcel: corregido con filtro por negocio ──
 async function generateExcel(filter) {
   const data = await getReportData(filter);
   const wb   = new ExcelJS.Workbook();
-  wb.creator  = 'Centro de Mando';
-  wb.created  = new Date();
+  wb.creator = 'Centro de Mando';
+  wb.created = new Date();
+
+  const ACCENT  = 'FF6C5CE7';
+  const GREEN   = 'FF00875A';
+  const RED     = 'FFC0392B';
+  const DARK    = 'FF1A1A2E';
+  const LIGHT   = 'FFF4F4F8';
+
+  const tabName = data.singleBusiness
+    ? data.singleBusiness.slice(0, 28)
+    : 'Resumen';
 
   // ── HOJA 1: Resumen ──
-  const ws1 = wb.addWorksheet('Resumen', { properties: { tabColor: { argb: '6C5CE7' } } });
+  const ws1 = wb.addWorksheet(tabName, { properties: { tabColor: { argb: ACCENT } } });
 
   // Título
   ws1.mergeCells('A1:F1');
-  ws1.getCell('A1').value = 'CENTRO DE MANDO — ' + data.period.toUpperCase();
-  ws1.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
-  ws1.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1A2E' } };
-  ws1.getCell('A1').alignment = { horizontal: 'center' };
-  ws1.getRow(1).height = 35;
+  const titleCell = ws1.getCell('A1');
+  titleCell.value = `CENTRO DE MANDO — ${data.period.toUpperCase()}`;
+  titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws1.getRow(1).height = 36;
 
-  // Período
   ws1.mergeCells('A2:F2');
-  ws1.getCell('A2').value = 'Período: ' + data.dateFrom + ' al ' + data.dateTo;
-  ws1.getCell('A2').font = { size: 10, color: { argb: 'FF636E72' } };
-  ws1.getCell('A2').alignment = { horizontal: 'center' };
+  const subCell = ws1.getCell('A2');
+  subCell.value = `Período: ${data.dateFrom} al ${data.dateTo}`;
+  subCell.font  = { size: 10, color: { argb: 'FF888899' } };
+  subCell.alignment = { horizontal: 'center' };
 
   ws1.addRow([]);
 
-  // Headers de tabla
-  const headerRow = ws1.addRow(['Negocio', 'Ingresos (Q)', 'Gastos (Q)', 'Balance (Q)', 'Transacciones', 'Estado']);
-  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6C5CE7' } };
-  headerRow.height = 22;
-  headerRow.alignment = { horizontal: 'center' };
+  // Métricas resumen
+  ws1.mergeCells('B4:C4'); ws1.getCell('B4').value = 'Total Ingresos';
+  ws1.mergeCells('D4:E4'); ws1.getCell('D4').value = 'Total Gastos';
+  ws1.mergeCells('F4:G4'); ws1.getCell('F4').value = 'Balance Neto';
+  ['B4','D4','F4'].forEach(c => {
+    ws1.getCell(c).font = { bold: true, size: 11 };
+    ws1.getCell(c).alignment = { horizontal: 'center' };
+  });
 
-  // Datos por negocio
-  data.businesses.forEach(function(b) {
+  ws1.mergeCells('B5:C5'); ws1.getCell('B5').value = parseFloat(data.totalIncome);
+  ws1.mergeCells('D5:E5'); ws1.getCell('D5').value = parseFloat(data.totalExpense);
+  ws1.mergeCells('F5:G5'); ws1.getCell('F5').value = parseFloat(data.totalBalance);
+  ws1.getCell('B5').numFmt = '"Q"#,##0.00'; ws1.getCell('B5').font = { bold: true, size: 14, color: { argb: GREEN } };
+  ws1.getCell('D5').numFmt = '"Q"#,##0.00'; ws1.getCell('D5').font = { bold: true, size: 14, color: { argb: RED } };
+  ws1.getCell('F5').numFmt = '"Q"#,##0.00';
+  ws1.getCell('F5').font = { bold: true, size: 14, color: { argb: parseFloat(data.totalBalance) >= 0 ? GREEN : RED } };
+  [5].forEach(r => ws1.getRow(r).height = 26);
+
+  ws1.addRow([]);
+  ws1.addRow([]);
+
+  // Tabla de negocios
+  const hRow = ws1.addRow(['Negocio', 'Ingresos', 'Gastos', 'Balance', 'Movimientos', 'Estado']);
+  hRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+  hRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+  hRow.height = 22;
+  hRow.eachCell(c => { c.alignment = { horizontal: 'center', vertical: 'middle' }; });
+
+  data.businesses.forEach((b, i) => {
     const bal = parseFloat(b.balance);
     const row = ws1.addRow([
       b.name,
@@ -304,58 +372,70 @@ async function generateExcel(filter) {
       parseFloat(b.expense),
       bal,
       parseInt(b.tx_count),
-      bal >= 0 ? 'Positivo' : 'Negativo'
+      bal >= 0 ? 'Positivo ✓' : 'Negativo ✗'
     ]);
+    if (i % 2 === 0) {
+      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT } };
+    }
     row.getCell(2).numFmt = '"Q"#,##0.00';
     row.getCell(3).numFmt = '"Q"#,##0.00';
     row.getCell(4).numFmt = '"Q"#,##0.00';
-    row.getCell(4).font = { bold: true, color: { argb: bal >= 0 ? 'FF00B894' : 'FFE17055' } };
-    row.getCell(6).font = { color: { argb: bal >= 0 ? 'FF00B894' : 'FFE17055' } };
+    row.getCell(4).font = { bold: true, color: { argb: bal >= 0 ? GREEN : RED } };
+    row.getCell(6).font = { color: { argb: bal >= 0 ? GREEN : RED } };
   });
 
-  // Totales
+  // Fila de totales
   ws1.addRow([]);
-  const totalRow = ws1.addRow(['TOTAL', data.totalIncome, data.totalExpense, data.totalBalance, '', '']);
-  totalRow.font = { bold: true };
-  totalRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8F9FA' } };
-  totalRow.getCell(2).numFmt = '"Q"#,##0.00';
-  totalRow.getCell(3).numFmt = '"Q"#,##0.00';
-  totalRow.getCell(4).numFmt = '"Q"#,##0.00';
-  totalRow.getCell(4).font = { bold: true, color: { argb: data.totalBalance >= 0 ? 'FF00B894' : 'FFE17055' } };
+  const totRow = ws1.addRow(['TOTAL GENERAL', data.totalIncome, data.totalExpense, data.totalBalance, data.transactions.length, '']);
+  totRow.font = { bold: true, size: 11 };
+  totRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE9FF' } };
+  totRow.getCell(2).numFmt = '"Q"#,##0.00';
+  totRow.getCell(3).numFmt = '"Q"#,##0.00';
+  totRow.getCell(4).numFmt = '"Q"#,##0.00';
+  totRow.getCell(4).font = { bold: true, color: { argb: parseFloat(data.totalBalance) >= 0 ? GREEN : RED } };
 
-  // Anchos de columna
-  ws1.columns = [
-    { width: 25 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 12 }
-  ];
+  ws1.columns = [{ width: 26 }, { width: 16 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 14 }];
 
   // ── HOJA 2: Transacciones ──
-  const ws2 = wb.addWorksheet('Transacciones', { properties: { tabColor: { argb: '00B894' } } });
+  const txName = data.singleBusiness
+    ? `${data.singleBusiness.slice(0,20)} - Movs`
+    : 'Transacciones';
 
-  const txHeader = ws2.addRow(['Fecha', 'Negocio', 'Tipo', 'Descripción', 'Categoría', 'Monto (Q)']);
-  txHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  txHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00B894' } };
-  txHeader.height = 22;
+  const ws2 = wb.addWorksheet(txName, { properties: { tabColor: { argb: 'FF00875A' } } });
 
-  data.transactions.forEach(function(t) {
-    const isIncome = t.type === 'income';
+  ws2.mergeCells('A1:F1');
+  const txTitle = ws2.getCell('A1');
+  txTitle.value = `MOVIMIENTOS — ${data.period.toUpperCase()}`;
+  txTitle.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+  txTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00875A' } };
+  txTitle.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws2.getRow(1).height = 28;
+
+  ws2.addRow([]);
+
+  const txH = ws2.addRow(['Fecha', 'Negocio', 'Tipo', 'Descripción', 'Categoría', 'Monto']);
+  txH.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  txH.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00875A' } };
+  txH.height = 20;
+
+  data.transactions.forEach((t, i) => {
+    const isInc = t.type === 'income';
     const row = ws2.addRow([
-      t.date,
+      t.date ? String(t.date).slice(0, 10) : '',
       t.business,
-      isIncome ? 'Ingreso' : 'Gasto',
+      isInc ? 'Ingreso' : 'Gasto',
       t.description || '',
       t.category || '',
-      isIncome ? parseFloat(t.amount) : -parseFloat(t.amount)
+      isInc ? parseFloat(t.amount) : -parseFloat(t.amount)
     ]);
+    if (i % 2 === 0) row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT } };
     row.getCell(6).numFmt = '"Q"#,##0.00';
-    row.getCell(6).font = { color: { argb: isIncome ? 'FF00B894' : 'FFE17055' } };
-    row.getCell(3).font = { color: { argb: isIncome ? 'FF00B894' : 'FFE17055' } };
+    row.getCell(6).font = { color: { argb: isInc ? GREEN : RED } };
+    row.getCell(3).font = { color: { argb: isInc ? GREEN : RED } };
   });
 
-  ws2.columns = [
-    { width: 12 }, { width: 22 }, { width: 12 }, { width: 35 }, { width: 18 }, { width: 14 }
-  ];
+  ws2.columns = [{ width: 12 }, { width: 22 }, { width: 12 }, { width: 36 }, { width: 18 }, { width: 14 }];
 
-  // Devolver como buffer
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }

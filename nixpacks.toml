@@ -1,5 +1,9 @@
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = [
+  "nodejs_20",
+  "texlive.combined.scheme-small",
+  "dejavu_fonts"
+]
 
 [phases.install]
 cmds = ["npm install"]
