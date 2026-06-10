@@ -99,18 +99,22 @@ async function think(chatId, userMessage, ctx) {
     '{"action":"delete_tx","id":numero}\n' +
     '{"action":"edit_tx","id":numero,"field":"amount|description","value":"nuevo"}\n' +
     '{"action":"last_tx"}\n' +
-    '{"action":"report","period":"texto del periodo"}\n' +
-    '{"action":"excel","period":"texto del periodo"}\n' +
+    '{"action":"report","period":"texto del periodo o nombre de negocio"}\n' +
+    '{"action":"excel","period":"texto del periodo o nombre de negocio"}\n' +
     '{"action":"publish_now","content":"texto a publicar"}\n' +
     '{"action":"schedule_post","content":"texto","days":"mon,tue,...","times":"09:00,18:00"}\n' +
     '{"action":"list_scheduled"}\n' +
     '{"action":"cancel_scheduled","id":numero}\n' +
     '{"action":"chat","reply":"respuesta en texto"}\n' +
-    '\nSi el usuario registra una venta/gasto y no menciona negocio, usa business_id:null. ' +
-    'Si dice "el último", "la #3" etc., busca en las transacciones recientes. ' +
-    'Si es una pregunta de análisis, consejos o conversación general, usa action:chat con una respuesta útil. ' +
-    'Moneda: Quetzales guatemaltecos (Q). ' +
-    'Para días en schedule_post: lunes=mon, martes=tue, miercoles=wed, jueves=thu, viernes=fri, sabado=sat, domingo=sun.';
+    '\nREGLAS IMPORTANTES:\n' +
+    '- Si el usuario pide "pdf", "informe", "reporte", "genera un informe", "dame un reporte", SIEMPRE usa action:report. NUNCA digas que no podes generar PDF.\n' +
+    '- Si el usuario pide "excel", "hoja de calculo", "spreadsheet", SIEMPRE usa action:excel.\n' +
+    '- Si menciona un negocio específico en el pedido de informe (ej: "informe de skittes", "reporte de gomitas"), ponelo en el campo period (ej: "skittes junio" o solo "skittes").\n' +
+    '- Si el usuario registra una venta/gasto y no menciona negocio, usa business_id:null.\n' +
+    '- Si dice "el último", "la #3" etc., busca en las transacciones recientes.\n' +
+    '- Si es una pregunta de análisis, consejos o conversación general, usa action:chat con una respuesta útil.\n' +
+    '- Moneda: Quetzales guatemaltecos (Q).\n' +
+    '- Para días en schedule_post: lunes=mon, martes=tue, miercoles=wed, jueves=thu, viernes=fri, sabado=sat, domingo=sun.';
 
   const msgs = [{ role: 'system', content: system }]
     .concat(history[chatId] || [])
@@ -148,13 +152,11 @@ async function execute(chatId, intent, userName, msg) {
       await tgSend(chatId, 'No entendi el monto. Intenta de nuevo con un numero claro.');
       return;
     }
-    // Si no hay negocio y hay varios, preguntar
     if (!intent.business_id) {
       const biz = await pool.query('SELECT id,name FROM businesses ORDER BY name');
       if (biz.rows.length === 1) {
         intent.business_id = biz.rows[0].id;
       } else if (biz.rows.length > 1) {
-        // Guardar pending y preguntar
         pendingTx[chatId] = intent;
         let opts = '';
         biz.rows.forEach(function(b, i) { opts += (i+1) + '. ' + b.name + '\n'; });
@@ -287,23 +289,29 @@ async function execute(chatId, intent, userName, msg) {
 
   // INFORME PDF
   if (a === 'report') {
-    await tgSend(chatId, 'Generando informe PDF...');
+    await tgSend(chatId, '⏳ Generando informe PDF...');
     try {
       const { generateReport } = require('./ai');
       const aiText = await generateReport(intent.period || 'resumen general', chatId);
       const buf = await generatePDF(intent.period, aiText);
-      await tgSendDoc(chatId, buf, 'informe.pdf', 'Informe ' + (intent.period||'general'));
-    } catch(e) { await tgSend(chatId, 'Error generando PDF: ' + e.message); }
+      await tgSendDoc(chatId, buf, 'informe.pdf', '📊 Informe ' + (intent.period||'general'));
+    } catch(e) {
+      console.error('PDF error:', e.message);
+      await tgSend(chatId, '❌ Error generando PDF: ' + e.message);
+    }
     return;
   }
 
   // EXCEL
   if (a === 'excel') {
-    await tgSend(chatId, 'Generando Excel...');
+    await tgSend(chatId, '⏳ Generando Excel...');
     try {
       const buf = await generateExcel(intent.period);
-      await tgSendDoc(chatId, buf, 'reporte.xlsx', 'Reporte Excel ' + (intent.period||'general'));
-    } catch(e) { await tgSend(chatId, 'Error generando Excel: ' + e.message); }
+      await tgSendDoc(chatId, buf, 'reporte.xlsx', '📈 Reporte Excel ' + (intent.period||'general'));
+    } catch(e) {
+      console.error('Excel error:', e.message);
+      await tgSend(chatId, '❌ Error generando Excel: ' + e.message);
+    }
     return;
   }
 
@@ -312,8 +320,8 @@ async function execute(chatId, intent, userName, msg) {
     const { publishToTelegram, publishToFacebook } = require('./scheduler');
     const rTg = await publishToTelegram(intent.content, null);
     const rFb = await publishToFacebook(intent.content, null);
-    let reply = rTg.ok ? 'Publicado en Telegram' : 'Error TG: ' + rTg.error;
-    reply += '\n' + (rFb.ok ? 'Publicado en Facebook' : 'Facebook no configurado');
+    let reply = rTg.ok ? '✅ Publicado en Telegram' : '❌ Error TG: ' + rTg.error;
+    reply += '\n' + (rFb.ok ? '✅ Publicado en Facebook' : 'Facebook no configurado');
     await tgSend(chatId, reply);
     return;
   }
@@ -328,7 +336,7 @@ async function execute(chatId, intent, userName, msg) {
     );
     const dayMap = {mon:'lunes',tue:'martes',wed:'miércoles',thu:'jueves',fri:'viernes',sat:'sábado',sun:'domingo'};
     const dayText = days.split(',').map(function(d){return dayMap[d]||d;}).join(', ');
-    await tgSend(chatId, 'Publicación programada.\nDías: ' + dayText + '\nHoras: ' + times);
+    await tgSend(chatId, '✅ Publicación programada.\nDías: ' + dayText + '\nHoras: ' + times);
     return;
   }
 
@@ -348,7 +356,7 @@ async function execute(chatId, intent, userName, msg) {
   // CANCELAR PROGRAMADO
   if (a === 'cancel_scheduled') {
     await pool.query('UPDATE scheduled_posts SET active=FALSE WHERE id=$1', [intent.id]);
-    await tgSend(chatId, 'Publicación #' + intent.id + ' cancelada.');
+    await tgSend(chatId, '✅ Publicación #' + intent.id + ' cancelada.');
     return;
   }
 
@@ -377,7 +385,7 @@ async function saveTransaction(chatId, bizId, type, amount, description, userNam
     if (r.rows.length) balText = '\nBalance ' + r.rows[0].name + ': <b>Q ' + parseFloat(r.rows[0].balance).toFixed(2) + '</b>';
   }
   await tgSend(chatId,
-    (type==='income'?'INGRESO':'GASTO') + ' registrado\n\n' +
+    (type==='income'?'✅ INGRESO':'💸 GASTO') + ' registrado\n\n' +
     'Total: <b>Q ' + amount.toFixed(2) + '</b>\n' +
     'Detalle: ' + (description||'—') + '\n' +
     'Por: ' + userName + balText
@@ -413,11 +421,10 @@ async function handleMessage(msg) {
       const { publishToTelegram, publishToFacebook } = require('./scheduler');
       const rTg = await publishToTelegram(content, photoUrl);
       const rFb = await publishToFacebook(content, photoUrl);
-      let reply = rTg.ok ? 'Publicado en Telegram' : 'Error TG: ' + rTg.error;
-      reply += '\n' + (rFb.ok ? 'Publicado en Facebook' : 'Facebook no configurado');
+      let reply = rTg.ok ? '✅ Publicado en Telegram' : '❌ Error TG: ' + rTg.error;
+      reply += '\n' + (rFb.ok ? '✅ Publicado en Facebook' : 'Facebook no configurado');
       await tgSend(chatId, reply);
     } else if (caption) {
-      // Programar con foto
       await tgSend(chatId, 'Foto recibida con texto. Para publicar ahora agrega "Publica ahorita" al final.');
     } else {
       await tgSend(chatId, 'Foto recibida. Enviame el texto de la publicación.');
@@ -433,10 +440,10 @@ async function handleMessage(msg) {
     if (/^si$/i.test(text.trim())) {
       if (pc.type === 'delete_business') {
         await pool.query('DELETE FROM businesses WHERE id=$1', [pc.id]);
-        await tgSend(chatId, 'Negocio <b>' + pc.name + '</b> y todas sus transacciones borrados.');
+        await tgSend(chatId, '✅ Negocio <b>' + pc.name + '</b> y todas sus transacciones borrados.');
       } else if (pc.type === 'delete_tx') {
         await pool.query('DELETE FROM transactions WHERE id=$1', [pc.id]);
-        await tgSend(chatId, 'Transacción borrada: ' + pc.desc);
+        await tgSend(chatId, '✅ Transacción borrada: ' + pc.desc);
       }
     } else {
       await tgSend(chatId, 'Cancelado.');
