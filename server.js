@@ -17,6 +17,7 @@ app.use('/api/config',       require('./routes/config'));
 app.use('/api/businesses',   require('./routes/businesses'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/posts',        require('./routes/posts'));
+app.use('/api/chat',         require('./routes/chat'));
 
 app.get('/api/health', function(req, res) {
   res.json({ ok: true, time: new Date().toISOString() });
