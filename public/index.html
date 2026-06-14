@@ -3,1216 +3,292 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CENTRO DE MANDO</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
+<title>Centro de Mando — Núcleo Neural</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* ── RESET & BASE ─────────────────────────────────────────── */
-*{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --void:#020408;
-  --deep:#050d15;
-  --panel:#070f1a;
-  --panel2:#0a1520;
-  --border:rgba(0,200,255,0.12);
-  --border2:rgba(0,200,255,0.28);
-  --cyan:#00c8ff;
-  --cyan2:#00eaff;
-  --cyan-dim:rgba(0,200,255,0.06);
-  --green:#00ff88;
-  --green-dim:rgba(0,255,136,0.08);
-  --red:#ff3355;
-  --red-dim:rgba(255,51,85,0.08);
-  --amber:#ffaa00;
-  --amber-dim:rgba(255,170,0,0.08);
-  --text:#c8e8f0;
-  --text2:#5a8a99;
-  --text3:#2a4a55;
-  --mono:'Share Tech Mono',monospace;
-  --display:'Orbitron',monospace;
-  --ui:'Rajdhani',sans-serif;
-  --glow:0 0 20px rgba(0,200,255,0.3);
-  --glow2:0 0 40px rgba(0,200,255,0.15);
+  --bg:#06090f;
+  --bg2:#0a0f18;
+  --panel:#0d1420;
+  --panel2:#101926;
+  --border:rgba(92,230,196,0.12);
+  --border2:rgba(92,230,196,0.25);
+  --text:#e8eef0;
+  --text2:#7e94a0;
+  --text3:#4a5e68;
+  --accent:#5ce6c4;
+  --accent-dim:rgba(92,230,196,0.15);
+  --amber:#e6a85c;
+  --amber-dim:rgba(230,168,92,0.15);
+  --red:#e65c5c;
+  --r:10px;
 }
-html,body{height:100%;overflow:hidden;background:var(--void);color:var(--text);font-family:var(--ui)}
-::selection{background:rgba(0,200,255,0.25)}
-::-webkit-scrollbar{width:3px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:'Inter',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  font-size:14px;
+  line-height:1.5;
+  overflow:hidden;
+}
+.mono{font-family:'Space Mono',monospace}
 
-/* ── CANVAS PARTICLES ─────────────────────────────────────── */
-#canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+body::before{
+  content:'';
+  position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(92,230,196,0.06) 0%, transparent 50%),
+    repeating-linear-gradient(0deg, transparent, transparent 49px, rgba(92,230,196,0.02) 50px),
+    repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(92,230,196,0.02) 50px);
+  pointer-events:none;
+  z-index:0;
+}
 
-/* ── SCANLINES OVERLAY ────────────────────────────────────── */
-.scanlines{position:fixed;inset:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px)}
+.app{
+  display:grid;
+  grid-template-columns: 280px 1fr 320px;
+  grid-template-rows: 56px 1fr;
+  height:100vh;
+  position:relative;
+  z-index:1;
+}
 
-/* ── GRID OVERLAY ─────────────────────────────────────────── */
-.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
-  background-image:linear-gradient(rgba(0,200,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,255,0.03) 1px,transparent 1px);
-  background-size:60px 60px}
+.topbar{
+  grid-column:1/-1;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 20px;
+  border-bottom:1px solid var(--border);
+  background:rgba(13,20,32,0.5);
+  backdrop-filter:blur(8px);
+}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-icon{
+  width:30px;height:30px;border:1px solid var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px; color:var(--accent); border-radius:6px;
+  position:relative;
+}
+.brand-icon::after{
+  content:''; position:absolute; inset:-3px;
+  border:1px solid var(--border); border-radius:8px;
+}
+.brand-title{font-weight:700;font-size:14px;letter-spacing:1px}
+.brand-sub{font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase}
+.topbar-right{display:flex;align-items:center;gap:18px}
+.tb-stat{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)}
+.tb-stat .dot{width:6px;height:6px;border-radius:50%;background:var(--text3)}
+.tb-stat .dot.on{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.tb-clock{font-size:13px;color:var(--accent);letter-spacing:1px}
 
-/* ── APP LAYOUT ───────────────────────────────────────────── */
-.app{position:relative;z-index:2;display:flex;height:100vh;overflow:hidden}
+.left-panel{
+  border-right:1px solid var(--border);
+  background:rgba(13,20,32,0.3);
+  overflow-y:auto;
+  padding:16px;
+}
+.section-label{
+  font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;
+  margin-bottom:10px; display:flex; align-items:center; gap:8px;
+}
+.section-label::after{content:'';flex:1;height:1px;background:var(--border)}
 
-/* ── SIDEBAR ──────────────────────────────────────────────── */
-.sidebar{width:240px;background:linear-gradient(180deg,var(--deep) 0%,var(--panel) 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:relative;overflow:hidden}
-.sidebar::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);animation:scan-h 3s ease-in-out infinite}
+.biz-card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:12px;
+  margin-bottom:10px;
+  transition:border-color .2s;
+  position:relative;
+  overflow:hidden;
+}
+.biz-card:hover{border-color:var(--border2)}
+.biz-card::before{
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--biz-color, var(--accent));
+}
+.biz-name{font-weight:600;font-size:13px;margin-bottom:8px}
+.biz-row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
+.biz-row .lbl{color:var(--text2)}
+.biz-row .val{font-family:'Space Mono',monospace}
+.biz-row .val.pos{color:var(--accent)}
+.biz-row .val.neg{color:var(--red)}
+.biz-balance{
+  margin-top:8px; padding-top:8px; border-top:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:baseline;
+}
+.biz-balance .lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+.biz-balance .val{font-family:'Space Mono',monospace;font-size:16px;font-weight:700}
 
-.brand{padding:20px 16px 16px;border-bottom:1px solid var(--border);position:relative}
-.brand-logo{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.brand-hex{width:38px;height:38px;position:relative;flex-shrink:0}
-.brand-hex svg{width:100%;height:100%}
-.brand-name{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:2px;color:var(--cyan);text-transform:uppercase}
-.brand-sub{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1px}
-.brand-status{display:flex;align-items:center;gap:6px;margin-top:8px}
-.status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse-dot 2s ease-in-out infinite}
-.status-text{font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:1px}
+.totals-card{
+  background:linear-gradient(135deg, var(--accent-dim), transparent);
+  border:1px solid var(--border2);
+  border-radius:var(--r);
+  padding:14px;
+  margin-bottom:16px;
+}
+.totals-card .lbl{font-size:10px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.totals-card .big{font-family:'Space Mono',monospace;font-size:24px;font-weight:700;color:var(--accent)}
+.totals-sub{display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--text2)}
+.totals-sub span b{color:var(--text)}
 
-.nav-label{padding:14px 16px 4px;font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:2px;text-transform:uppercase}
-.nb{display:flex;align-items:center;gap:10px;padding:9px 16px;margin:2px 8px;border-radius:3px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text2);border:none;background:none;width:calc(100% - 16px);text-align:left;font-family:var(--ui);letter-spacing:0.5px;transition:all .2s;position:relative;text-transform:uppercase}
-.nb::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:0;height:60%;background:var(--cyan);border-radius:0 2px 2px 0;transition:width .2s}
-.nb:hover{color:var(--cyan);background:var(--cyan-dim)}
-.nb:hover::before{width:2px}
-.nb.active{color:var(--cyan);background:var(--cyan-dim);box-shadow:inset 0 0 20px rgba(0,200,255,0.05)}
-.nb.active::before{width:2px;box-shadow:0 0 8px var(--cyan)}
-.nb .ico{width:14px;height:14px;opacity:0.6;flex-shrink:0;transition:opacity .2s}
-.nb:hover .ico,.nb.active .ico{opacity:1}
-.nb .badge{margin-left:auto;background:rgba(0,200,255,0.15);color:var(--cyan);font-size:9px;padding:1px 6px;border-radius:2px;font-family:var(--mono);border:1px solid var(--border2)}
+.empty-msg{font-size:12px;color:var(--text3);text-align:center;padding:20px 0}
 
-.sidebar-foot{margin-top:auto;padding:12px 8px;border-top:1px solid var(--border)}
-.conn-row{display:flex;align-items:center;gap:6px;padding:5px 8px;font-family:var(--mono);font-size:9px;color:var(--text3)}
-.conn-dot{width:5px;height:5px;border-radius:50%;background:var(--text3);flex-shrink:0}
-.conn-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
-.version{font-family:var(--mono);font-size:8px;color:var(--text3);text-align:center;padding:4px;letter-spacing:1px}
+.center-panel{
+  display:flex; flex-direction:column; align-items:center;
+  padding:20px; overflow:hidden;
+  position:relative;
+}
+.sphere-wrap{
+  position:relative;
+  width:240px; height:240px;
+  margin:10px auto 6px;
+  flex-shrink:0;
+}
+#sphereCanvas{width:100%;height:100%}
+.sphere-status{
+  position:absolute; bottom:-22px; left:0; right:0; text-align:center;
+  font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--text3);
+  font-family:'Space Mono',monospace;
+}
+.sphere-status.active{color:var(--accent)}
 
-/* ── MAIN ─────────────────────────────────────────────────── */
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.chat-area{
+  flex:1; width:100%; max-width:680px;
+  display:flex; flex-direction:column;
+  margin-top:32px; min-height:0;
+}
+.chat-messages{
+  flex:1; overflow-y:auto; padding:6px 4px;
+  display:flex; flex-direction:column; gap:10px;
+}
+.msg{
+  max-width:85%; padding:10px 14px; border-radius:10px; font-size:13px;
+  line-height:1.6; animation:fadeIn .25s ease;
+}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{
+  align-self:flex-end; background:var(--accent-dim); border:1px solid var(--border2);
+  color:var(--text);
+}
+.msg.ai{
+  align-self:flex-start; background:var(--panel); border:1px solid var(--border);
+  color:var(--text);
+}
+.msg.system{
+  align-self:center; font-size:11px; color:var(--text3); font-family:'Space Mono',monospace;
+  letter-spacing:1px;
+}
+.msg-label{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:4px}
 
-/* ── TOPBAR ───────────────────────────────────────────────── */
-.topbar{background:var(--deep);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative}
-.topbar::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0.3}
-.page-title{font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:3px;color:var(--cyan);text-transform:uppercase}
-.topbar-right{display:flex;align-items:center;gap:12px}
-#api-status{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1px}
-.clock{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:2px}
+.input-row{
+  display:flex; gap:8px; padding:12px 4px 4px; border-top:1px solid var(--border);
+  margin-top:10px;
+}
+.input-row input{
+  flex:1; background:var(--panel); border:1px solid var(--border);
+  border-radius:var(--r); padding:11px 14px; color:var(--text);
+  font-family:'Inter',sans-serif; font-size:13px; outline:none;
+}
+.input-row input:focus{border-color:var(--accent)}
+.input-row input::placeholder{color:var(--text3)}
+.icon-btn{
+  width:42px; height:42px; border-radius:var(--r); border:1px solid var(--border);
+  background:var(--panel); color:var(--text2); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:16px;
+  transition:all .15s; flex-shrink:0;
+}
+.icon-btn:hover{border-color:var(--border2);color:var(--accent)}
+.icon-btn.active{background:var(--accent); color:var(--bg); border-color:var(--accent)}
+.icon-btn.send{background:var(--accent); color:var(--bg); border-color:var(--accent)}
 
-/* ── CONTENT ──────────────────────────────────────────────── */
-.content{flex:1;overflow-y:auto;padding:20px;background:var(--void)}
-.page{display:none}.page.active{display:block}
-
-/* ── BUTTONS ──────────────────────────────────────────────── */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:2px;font-size:11px;cursor:pointer;font-family:var(--ui);font-weight:600;letter-spacing:1px;text-transform:uppercase;border:1px solid var(--border2);background:var(--cyan-dim);color:var(--cyan);transition:all .2s;position:relative;overflow:hidden}
-.btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 30%,rgba(0,200,255,0.05) 100%)}
-.btn:hover{background:rgba(0,200,255,0.12);box-shadow:var(--glow);border-color:var(--cyan)}
-.btn-green{border-color:rgba(0,255,136,0.3);background:var(--green-dim);color:var(--green)}
-.btn-green:hover{background:rgba(0,255,136,0.12);box-shadow:0 0 20px rgba(0,255,136,0.3)}
-.btn-red{border-color:rgba(255,51,85,0.3);background:var(--red-dim);color:var(--red)}
-.btn-red:hover{background:rgba(255,51,85,0.12);box-shadow:0 0 20px rgba(255,51,85,0.3)}
-.btn-sm{padding:5px 10px;font-size:10px}
-.btn-icon{padding:6px;border-radius:2px}
-
-/* ── CARDS ────────────────────────────────────────────────── */
-.card{background:var(--panel);border:1px solid var(--border);border-radius:2px;padding:16px;position:relative;overflow:hidden}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0.4}
-.card-title{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.card-title::before{content:'//';color:var(--cyan);opacity:0.5}
-
-/* ── METRICS GRID ─────────────────────────────────────────── */
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
-.metric-card{background:var(--panel);border:1px solid var(--border);border-radius:2px;padding:14px;position:relative;overflow:hidden;cursor:default;transition:border-color .2s}
-.metric-card:hover{border-color:var(--border2)}
-.metric-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0;transition:opacity .2s}
-.metric-card:hover::after{opacity:0.5}
-.m-label{font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px}
-.m-value{font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:-0.5px;color:var(--cyan);line-height:1}
-.m-value.green{color:var(--green)}
-.m-value.red{color:var(--red)}
-.m-sub{font-family:var(--mono);font-size:8px;color:var(--text3);margin-top:5px;letter-spacing:1px}
-.m-bar{height:2px;background:var(--border);border-radius:1px;margin-top:8px;overflow:hidden}
-.m-bar-fill{height:100%;border-radius:1px;background:var(--cyan);transition:width 1s ease;box-shadow:0 0 6px var(--cyan)}
-
-/* ── TWO / THREE COL ──────────────────────────────────────── */
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.three-col{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-
-/* ── BIZ CARDS ────────────────────────────────────────────── */
-.biz-card{background:var(--panel);border:1px solid var(--border);border-radius:2px;padding:16px;cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
-.biz-card:hover{border-color:var(--cyan);transform:translateY(-2px);box-shadow:var(--glow2)}
-.biz-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--cyan);opacity:0;transition:opacity .2s}
-.biz-card:hover::before{opacity:1}
-.biz-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;position:relative}
-.biz-dot::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1px solid currentColor;opacity:0.3;animation:pulse-ring 2s ease-in-out infinite}
-.biz-name{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text)}
-.biz-cat{font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:1px;margin-top:2px}
-.biz-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px}
-.biz-stat-val{font-family:var(--display);font-size:14px;font-weight:700}
-.biz-stat-lab{font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:1px;margin-top:2px}
-
-/* ── TRANSACTIONS ─────────────────────────────────────────── */
-.tx-item{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);transition:background .15s}
+.right-panel{
+  border-left:1px solid var(--border);
+  background:rgba(13,20,32,0.3);
+  overflow-y:auto;
+  padding:16px;
+}
+.tx-item{
+  padding:9px 0; border-bottom:1px solid var(--border);
+  font-size:12px;
+}
 .tx-item:last-child{border-bottom:none}
-.tx-item:hover{background:var(--cyan-dim);margin:0 -16px;padding:9px 16px}
-.tx-icon{width:30px;height:30px;border-radius:2px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--mono);font-size:12px;font-weight:bold;border:1px solid}
-.tx-icon.income{background:var(--green-dim);border-color:rgba(0,255,136,0.2);color:var(--green)}
-.tx-icon.expense{background:var(--red-dim);border-color:rgba(255,51,85,0.2);color:var(--red)}
-.tx-desc{font-size:12px;font-family:var(--ui);font-weight:500}
-.tx-meta{font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:2px;letter-spacing:0.5px}
-.tx-amount{font-family:var(--display);font-size:13px;font-weight:700;flex-shrink:0}
-.tx-amount.income{color:var(--green)}
+.tx-top{display:flex; justify-content:space-between; margin-bottom:2px}
+.tx-amount{font-family:'Space Mono',monospace; font-weight:700}
+.tx-amount.income{color:var(--accent)}
 .tx-amount.expense{color:var(--red)}
+.tx-meta{color:var(--text3); font-size:10px}
+.tx-desc{color:var(--text2); font-size:11px; margin-top:2px}
 
-/* ── FORMS ────────────────────────────────────────────────── */
-.form-group{margin-bottom:14px}
-.form-label{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;display:block}
-.form-input{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:2px;padding:9px 12px;font-size:12px;color:var(--text);font-family:var(--mono);transition:border-color .15s,box-shadow .15s;letter-spacing:0.5px}
-.form-input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 1px rgba(0,200,255,0.1),var(--glow)}
-.form-input::placeholder{color:var(--text3)}
-textarea.form-input{resize:vertical;min-height:90px;line-height:1.6}
-select.form-input{cursor:pointer}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 
-/* ── FEEDBACK ─────────────────────────────────────────────── */
-.fb-msg{border-radius:2px;padding:8px 12px;font-size:11px;margin-bottom:12px;display:none;font-family:var(--mono);letter-spacing:0.5px;border-left:2px solid}
-.fb-msg.ok{background:var(--green-dim);border-color:var(--green);color:var(--green)}
-.fb-msg.err{background:var(--red-dim);border-color:var(--red);color:var(--red)}
-.fb-msg.load{background:var(--cyan-dim);border-color:var(--cyan);color:var(--cyan)}
-
-/* ── MODAL ────────────────────────────────────────────────── */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-.modal-overlay.open{display:flex}
-.modal{background:var(--deep);border:1px solid var(--border2);border-radius:2px;padding:24px;width:90%;max-width:520px;max-height:88vh;overflow-y:auto;position:relative;box-shadow:var(--glow),0 40px 80px rgba(0,0,0,0.8)}
-.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
-.modal-title{font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--cyan);margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;text-transform:uppercase}
-
-/* ── POSTS ────────────────────────────────────────────────── */
-.post-item{background:var(--panel);border:1px solid var(--border);border-radius:2px;padding:14px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start;transition:all .2s;position:relative}
-.post-item:hover{border-color:var(--border2)}
-.net-av{width:32px;height:32px;border-radius:2px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;border:1px solid}
-.net-av.fb{background:rgba(74,144,217,0.1);border-color:rgba(74,144,217,0.3)}
-.net-av.tg{background:rgba(0,200,255,0.1);border-color:rgba(0,200,255,0.3)}
-.tag{padding:2px 8px;border-radius:2px;font-size:9px;font-weight:700;text-transform:uppercase;font-family:var(--mono);letter-spacing:1px;border:1px solid}
-.tag-scheduled{background:var(--amber-dim);border-color:rgba(255,170,0,0.3);color:var(--amber)}
-.tag-published{background:var(--green-dim);border-color:rgba(0,255,136,0.3);color:var(--green)}
-.tag-draft{background:var(--border);border-color:var(--border);color:var(--text3)}
-.tag-failed{background:var(--red-dim);border-color:rgba(255,51,85,0.3);color:var(--red)}
-
-/* ── NET TOGGLE ───────────────────────────────────────────── */
-.net-toggle{display:flex;gap:8px}
-.net-btn{flex:1;padding:10px;border:1px solid var(--border);background:var(--panel2);border-radius:2px;cursor:pointer;font-family:var(--mono);font-size:10px;color:var(--text3);text-align:center;transition:all .2s;letter-spacing:1px;text-transform:uppercase}
-.net-btn.active-fb{border-color:rgba(74,144,217,0.5);background:rgba(74,144,217,0.08);color:#4a90d9;box-shadow:0 0 16px rgba(74,144,217,0.2)}
-.net-btn.active-tg{border-color:var(--border2);background:var(--cyan-dim);color:var(--cyan);box-shadow:var(--glow)}
-
-/* ── SETUP STEPS ──────────────────────────────────────────── */
-.setup-step{background:var(--panel);border:1px solid var(--border);border-radius:2px;padding:16px;margin-bottom:10px}
-.step-hdr{display:flex;align-items:center;gap:12px;cursor:pointer}
-.step-num{width:24px;height:24px;border-radius:2px;background:var(--panel2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:bold;color:var(--text2);flex-shrink:0}
-.step-num.done{background:var(--green-dim);border-color:rgba(0,255,136,0.3);color:var(--green)}
-.step-body{margin-top:14px;font-size:12px;color:var(--text2);line-height:1.8;font-family:var(--ui)}
-code{font-family:var(--mono);background:var(--panel2);padding:1px 6px;border-radius:2px;font-size:11px;color:var(--cyan);border:1px solid var(--border)}
-
-/* ── JARVIS PANEL ─────────────────────────────────────────── */
-#jarvis{position:fixed;bottom:24px;right:24px;z-index:100;width:380px}
-.jarvis-bubble{background:var(--deep);border:1px solid var(--border2);border-radius:2px;box-shadow:var(--glow),0 20px 60px rgba(0,0,0,0.8);overflow:hidden;display:none;flex-direction:column;max-height:480px;position:relative}
-.jarvis-bubble::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent)}
-.jarvis-bubble.open{display:flex}
-.jarvis-header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
-.jarvis-avatar{width:32px;height:32px;border-radius:50%;border:1px solid var(--cyan);display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--cyan-dim);animation:pulse-ring-slow 3s ease-in-out infinite;flex-shrink:0}
-.jarvis-title{font-family:var(--display);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--cyan)}
-.jarvis-subtitle{font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:1px}
-.jarvis-close{margin-left:auto;cursor:pointer;font-family:var(--mono);font-size:14px;color:var(--text3);transition:color .15s;background:none;border:none;padding:2px 6px}
-.jarvis-close:hover{color:var(--red)}
-.jarvis-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
-.j-msg{max-width:88%;padding:8px 12px;border-radius:2px;font-size:12px;line-height:1.6;font-family:var(--ui);animation:fadeIn .25s ease}
-.j-msg.user{align-self:flex-end;background:var(--cyan-dim);border:1px solid var(--border2);color:var(--cyan);font-family:var(--mono);font-size:11px}
-.j-msg.ai{align-self:flex-start;background:var(--panel2);border:1px solid var(--border);color:var(--text)}
-.j-msg.ai.thinking{color:var(--text3)}
-.j-msg.ai.thinking::after{content:'...';animation:dots 1.2s steps(3,end) infinite}
-.jarvis-input-row{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
-.jarvis-input{flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:2px;padding:8px 10px;font-size:11px;color:var(--text);font-family:var(--mono);transition:border-color .15s}
-.jarvis-input:focus{outline:none;border-color:var(--cyan)}
-.jarvis-send{background:var(--cyan);border:none;border-radius:2px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
-.jarvis-send:hover{background:var(--cyan2);box-shadow:var(--glow)}
-.jarvis-send svg{width:14px;height:14px}
-
-.jarvis-fab{width:52px;height:52px;border-radius:50%;background:var(--deep);border:1px solid var(--cyan);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:var(--glow);transition:all .25s;animation:pulse-fab 3s ease-in-out infinite;margin-left:auto}
-.jarvis-fab:hover{transform:scale(1.08);box-shadow:0 0 30px rgba(0,200,255,0.5)}
-
-/* ── ANIMATIONS ───────────────────────────────────────────── */
-@keyframes scan-h{0%,100%{opacity:0.3;transform:translateX(-100%)}50%{opacity:1}to{transform:translateX(100%)}}
-@keyframes pulse-dot{0%,100%{opacity:1;box-shadow:0 0 8px var(--green)}50%{opacity:0.5;box-shadow:0 0 16px var(--green)}}
-@keyframes pulse-ring{0%,100%{transform:scale(1);opacity:0.3}50%{transform:scale(1.5);opacity:0}}
-@keyframes pulse-ring-slow{0%,100%{box-shadow:0 0 0 0 rgba(0,200,255,0.4)}70%{box-shadow:0 0 0 8px rgba(0,200,255,0)}}
-@keyframes pulse-fab{0%,100%{box-shadow:0 0 20px rgba(0,200,255,0.3)}50%{box-shadow:0 0 35px rgba(0,200,255,0.6)}}
-@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-@keyframes dots{0%,20%{content:''}40%{content:'.'}60%{content:'..'}80%,100%{content:'...'}}
-@keyframes slideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
-@keyframes countUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@keyframes hud-scan{0%{top:-2px}100%{top:100%}}
-
-.animate-in{animation:slideIn .3s ease both}
-.count-up{animation:countUp .6s ease both}
-
-/* ── HUD CORNER BRACKETS ──────────────────────────────────── */
-.hud{position:relative}
-.hud::before,.hud::after{content:'';position:absolute;width:10px;height:10px;border-color:var(--cyan);border-style:solid;opacity:0.6}
-.hud::before{top:-1px;left:-1px;border-width:1px 0 0 1px}
-.hud::after{top:-1px;right:-1px;border-width:1px 1px 0 0}
-
-/* ── COMPARISON ───────────────────────────────────────────── */
-.comp-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
-.comp-row:last-child{border-bottom:none}
-.comp-rank{width:22px;height:22px;border-radius:2px;background:var(--panel2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:bold;color:var(--text2);flex-shrink:0}
-.comp-rank.gold{background:var(--amber-dim);border-color:rgba(255,170,0,0.3);color:var(--amber)}
-.prog{height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-top:4px}
-.prog-fill{height:100%;border-radius:1px;background:linear-gradient(90deg,var(--cyan),var(--cyan2));transition:width 1s ease;box-shadow:0 0 6px var(--cyan)}
+@media (max-width: 1100px){
+  .app{grid-template-columns: 1fr; grid-template-rows: 56px auto 1fr auto}
+  .left-panel{grid-row:2; border-right:none; border-bottom:1px solid var(--border); max-height:200px}
+  .center-panel{grid-row:3}
+  .right-panel{grid-row:4; border-left:none; border-top:1px solid var(--border); max-height:200px}
+}
 </style>
 </head>
 <body>
-
-<canvas id="canvas"></canvas>
-<div class="scanlines"></div>
-<div class="grid-bg"></div>
-
 <div class="app">
 
-<!-- ── SIDEBAR ─────────────────────────────────────────────── -->
-<div class="sidebar">
-  <div class="brand">
-    <div class="brand-logo">
-      <div class="brand-hex">
-        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <polygon points="20,2 36,11 36,29 20,38 4,29 4,11" stroke="#00c8ff" stroke-width="1" fill="rgba(0,200,255,0.05)"/>
-          <polygon points="20,8 30,14 30,26 20,32 10,26 10,14" stroke="#00c8ff" stroke-width="0.5" fill="rgba(0,200,255,0.03)" opacity="0.6"/>
-          <text x="20" y="24" text-anchor="middle" fill="#00c8ff" font-size="10" font-family="monospace" font-weight="bold">CM</text>
-        </svg>
-      </div>
-      <div>
-        <div class="brand-name">C. Mando</div>
-        <div class="brand-sub">SISTEMA v2.0</div>
-      </div>
-    </div>
-    <div class="brand-status">
-      <div class="status-dot"></div>
-      <div class="status-text">SISTEMA EN LÍNEA</div>
-    </div>
-  </div>
-
-  <div class="nav-label">Principal</div>
-  <button class="nb active" onclick="nav('dashboard',this)">
-    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="0.5"/><rect x="14" y="3" width="7" height="7" rx="0.5"/><rect x="3" y="14" width="7" height="7" rx="0.5"/><rect x="14" y="14" width="7" height="7" rx="0.5"/></svg>
-    Dashboard
-  </button>
-
-  <div class="nav-label">Negocios</div>
-  <button class="nb" onclick="nav('businesses',this)">
-    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-    Negocios
-    <span class="badge" id="biz-badge">0</span>
-  </button>
-  <button class="nb" onclick="nav('finances',this)">
-    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-    Finanzas
-  </button>
-
-  <div class="nav-label">Social</div>
-  <button class="nb" onclick="nav('compose',this)">
-    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-    Publicidad
-  </button>
-  <button class="nb" onclick="nav('posts',this)">
-    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="3" cy="18" r="1"/></svg>
-    Publicaciones
-    <span class="badge" id="posts-badge">0</span>
-  </button>
-  <button class="nb" onclick="nav('comparison',this)">
-    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-    Análisis
-  </button>
-
-  <div class="sidebar-foot">
-    <button class="nb" onclick="nav('setup',this)" style="font-size:10px">
-      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-      Configuración
-    </button>
-    <div class="conn-row">
-      <div class="conn-dot" id="dot-tg"></div><span style="flex:1" id="conn-tg">Telegram</span>
-      <div class="conn-dot" id="dot-fb"></div><span id="conn-fb">Facebook</span>
-    </div>
-    <div class="version">SYS // BUILD 2.0.1</div>
-  </div>
-</div>
-
-<!-- ── MAIN ────────────────────────────────────────────────── -->
-<div class="main">
   <div class="topbar">
-    <div class="page-title" id="page-label">// DASHBOARD</div>
-    <div class="topbar-right">
-      <div class="clock" id="clock">00:00:00</div>
-      <span id="api-status">CONECTANDO...</span>
-      <button class="btn btn-sm" onclick="nav('compose',document.querySelectorAll('.nb')[4])">+ PUBLICAR</button>
-    </div>
-  </div>
-
-  <div class="content">
-
-    <!-- DASHBOARD -->
-    <div id="page-dashboard" class="page active">
-      <div class="metrics" id="dash-metrics">
-        <div class="metric-card hud animate-in" style="animation-delay:.05s">
-          <div class="m-label">Negocios activos</div>
-          <div class="m-value" id="dm-biz">—</div>
-          <div class="m-sub">unidades operativas</div>
-          <div class="m-bar"><div class="m-bar-fill" id="bar-biz" style="width:0%"></div></div>
-        </div>
-        <div class="metric-card hud animate-in" style="animation-delay:.1s">
-          <div class="m-label">Balance total</div>
-          <div class="m-value" id="dm-balance">—</div>
-          <div class="m-sub">ingresos − gastos</div>
-          <div class="m-bar"><div class="m-bar-fill" id="bar-balance" style="width:0%;background:var(--green)"></div></div>
-        </div>
-        <div class="metric-card hud animate-in" style="animation-delay:.15s">
-          <div class="m-label">Posts publicados</div>
-          <div class="m-value" id="dm-posts">—</div>
-          <div class="m-sub">en todas las redes</div>
-          <div class="m-bar"><div class="m-bar-fill" id="bar-posts" style="width:0%;background:var(--amber)"></div></div>
-        </div>
-        <div class="metric-card hud animate-in" style="animation-delay:.2s">
-          <div class="m-label">Programados</div>
-          <div class="m-value" id="dm-sched">—</div>
-          <div class="m-sub">pendientes de envío</div>
-          <div class="m-bar"><div class="m-bar-fill" id="bar-sched" style="width:0%;background:var(--red)"></div></div>
-        </div>
-      </div>
-      <div class="two-col">
-        <div class="card hud animate-in" style="animation-delay:.25s">
-          <div class="card-title">Negocios — estado financiero</div>
-          <div id="dash-biz-list"><div style="color:var(--text3);font-family:var(--mono);font-size:10px">CARGANDO...</div></div>
-        </div>
-        <div class="card hud animate-in" style="animation-delay:.3s">
-          <div class="card-title">Actividad reciente</div>
-          <div id="dash-posts-list"><div style="color:var(--text3);font-family:var(--mono);font-size:10px">CARGANDO...</div></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- BUSINESSES -->
-    <div id="page-businesses" class="page">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <div style="font-family:var(--display);font-size:11px;letter-spacing:2px;color:var(--cyan)">// UNIDADES OPERATIVAS</div>
-        <button class="btn" onclick="openModal('modal-new-biz')">+ NUEVO NEGOCIO</button>
-      </div>
-      <div class="three-col" id="biz-grid"><div style="color:var(--text3);font-family:var(--mono);font-size:10px">CARGANDO...</div></div>
-    </div>
-
-    <!-- FINANCES -->
-    <div id="page-finances" class="page">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <div style="font-family:var(--display);font-size:11px;letter-spacing:2px;color:var(--cyan)">// MÓDULO FINANCIERO</div>
-        <div style="display:flex;gap:8px">
-          <select class="form-input btn-sm" id="fin-biz-filter" onchange="loadTransactions()" style="width:auto;padding:5px 10px;font-size:10px">
-            <option value="">TODOS LOS NEGOCIOS</option>
-          </select>
-          <button class="btn btn-green btn-sm" onclick="openTxModal('income')">+ INGRESO</button>
-          <button class="btn btn-red btn-sm" onclick="openTxModal('expense')">+ GASTO</button>
-        </div>
-      </div>
-      <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
-        <div class="metric-card"><div class="m-label">Total ingresos</div><div class="m-value green" id="fin-income">Q 0</div></div>
-        <div class="metric-card"><div class="m-label">Total gastos</div><div class="m-value red" id="fin-expense">Q 0</div></div>
-        <div class="metric-card"><div class="m-label">Balance neto</div><div class="m-value" id="fin-balance">Q 0</div></div>
-      </div>
-      <div class="card" style="margin-top:12px">
-        <div class="card-title">Registro de movimientos</div>
-        <div id="tx-list"><div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:30px">SIN MOVIMIENTOS</div></div>
-      </div>
-    </div>
-
-    <!-- COMPOSE -->
-    <div id="page-compose" class="page">
-      <div style="font-family:var(--display);font-size:11px;letter-spacing:2px;color:var(--cyan);margin-bottom:16px">// MÓDULO DE DIFUSIÓN</div>
-      <div id="compose-fb" class="fb-msg"></div>
-      <div class="card">
-        <div class="form-row" style="margin-bottom:14px">
-          <div class="form-group" style="margin-bottom:0">
-            <label class="form-label">Unidad operativa</label>
-            <select class="form-input" id="post-biz"><option value="">— Sin asignar —</option></select>
-          </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label class="form-label">Canales de difusión</label>
-            <div class="net-toggle">
-              <div class="net-btn" id="tog-fb" onclick="toggleNet('fb')">📘 Facebook</div>
-              <div class="net-btn" id="tog-tg" onclick="toggleNet('tg')">💬 Telegram</div>
-            </div>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Contenido del mensaje</label>
-          <textarea class="form-input" id="post-text" placeholder="Escribe el contenido de tu publicidad..." oninput="document.getElementById('char-ct').textContent=this.value.length+'/2200'"></textarea>
-          <div style="text-align:right;font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px" id="char-ct">0/2200</div>
-        </div>
-        <div class="form-row">
-          <div class="form-group" style="margin-bottom:0"><label class="form-label">Fecha programada</label><input type="date" class="form-input" id="post-date"></div>
-          <div class="form-group" style="margin-bottom:0"><label class="form-label">Hora</label><input type="time" class="form-input" id="post-time" value="09:00"></div>
-        </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
-          <button class="btn btn-sm" onclick="savePost('draft')">BORRADOR</button>
-          <button class="btn btn-sm" onclick="savePost('scheduled')">PROGRAMAR</button>
-          <button class="btn btn-sm" style="background:var(--cyan);color:var(--void);border-color:var(--cyan)" onclick="saveAndPublishNow()">▶ PUBLICAR AHORA</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- POSTS -->
-    <div id="page-posts" class="page">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <div style="font-family:var(--display);font-size:11px;letter-spacing:2px;color:var(--cyan)">// REGISTRO DE DIFUSIÓN</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <select class="form-input btn-sm" id="posts-biz-filter" onchange="loadPosts()" style="width:auto;padding:5px 10px;font-size:10px"><option value="">TODOS</option></select>
-          <button class="btn btn-sm" onclick="loadPostsFiltered('')" id="pf-all">ALL</button>
-          <button class="btn btn-sm" onclick="loadPostsFiltered('scheduled')" id="pf-sched">PROG</button>
-          <button class="btn btn-sm" onclick="loadPostsFiltered('published')" id="pf-pub">PUB</button>
-          <button class="btn btn-sm" onclick="loadPostsFiltered('draft')" id="pf-draft">DRAFT</button>
-        </div>
-      </div>
-      <div id="posts-list-main"></div>
-    </div>
-
-    <!-- COMPARISON -->
-    <div id="page-comparison" class="page">
-      <div style="font-family:var(--display);font-size:11px;letter-spacing:2px;color:var(--cyan);margin-bottom:16px">// ANÁLISIS COMPARATIVO</div>
-      <div class="two-col" style="margin-bottom:12px">
-        <div class="card"><div class="card-title">Top publicidades — alcance</div><div id="comp-reach"></div></div>
-        <div class="card"><div class="card-title">Rendimiento por negocio</div><div id="comp-biz"></div></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Actualizar estadísticas</div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Publicación</label><select class="form-input" id="stat-post-sel"></select></div>
-          <div class="form-group"><label class="form-label">Alcance</label><input type="number" class="form-input" id="stat-reach" placeholder="0"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">Clics</label><input type="number" class="form-input" id="stat-clicks" placeholder="0"></div>
-          <div style="display:flex;align-items:flex-end;margin-bottom:14px"><button class="btn" onclick="updateStats()" style="width:100%">ACTUALIZAR</button></div>
-        </div>
-        <div id="stat-fb" class="fb-msg"></div>
-      </div>
-    </div>
-
-    <!-- SETUP -->
-    <div id="page-setup" class="page">
-      <div style="font-family:var(--display);font-size:11px;letter-spacing:2px;color:var(--cyan);margin-bottom:16px">// CONFIGURACIÓN DEL SISTEMA</div>
-      <div id="setup-fb" class="fb-msg"></div>
-      <div class="card" style="margin-bottom:12px">
-        <div class="card-title">Servidor backend</div>
-        <div style="display:flex;gap:8px">
-          <input type="text" class="form-input" id="server-url" placeholder="https://tu-app.railway.app" style="font-family:var(--mono);font-size:11px">
-          <button class="btn" onclick="saveServerUrl()">CONECTAR</button>
-        </div>
-        <div id="server-status" style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:8px;letter-spacing:1px">SIN CONFIGURAR</div>
-      </div>
-      <div class="setup-step">
-        <div class="step-hdr" onclick="toggleStep('tg-step')">
-          <div class="step-num" id="num-tg">1</div>
-          <div><div style="font-weight:600;font-size:13px">Bot de Telegram</div><div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:2px">Token + Chat ID</div></div>
-        </div>
-        <div id="tg-step" class="step-body">
-          <div class="form-row" style="margin-top:12px">
-            <div class="form-group" style="margin-bottom:0"><label class="form-label">Bot Token</label><input type="password" class="form-input" id="cfg-tg-token" placeholder="1234567890:ABCdef..."></div>
-            <div class="form-group" style="margin-bottom:0"><label class="form-label">Chat ID</label><input type="text" class="form-input" id="cfg-tg-chatid" placeholder="-1001234567890"></div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn" onclick="saveApiConfig('tg')">GUARDAR</button>
-            <button class="btn btn-sm" onclick="testApi('tg')">PROBAR</button>
-          </div>
-        </div>
-      </div>
-      <div class="setup-step">
-        <div class="step-hdr" onclick="toggleStep('fb-step')">
-          <div class="step-num" id="num-fb">2</div>
-          <div><div style="font-weight:600;font-size:13px">Facebook Page</div><div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:2px">Access Token + Page ID</div></div>
-        </div>
-        <div id="fb-step" class="step-body" style="display:none">
-          <div class="form-row" style="margin-top:12px">
-            <div class="form-group" style="margin-bottom:0"><label class="form-label">Page Access Token</label><input type="password" class="form-input" id="cfg-fb-token" placeholder="EAABwzL..."></div>
-            <div class="form-group" style="margin-bottom:0"><label class="form-label">Page ID</label><input type="text" class="form-input" id="cfg-fb-pageid" placeholder="123456789"></div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn" onclick="saveApiConfig('fb')">GUARDAR</button>
-            <button class="btn btn-sm" onclick="testApi('fb')">PROBAR</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-</div>
-
-<!-- ── MODALS ──────────────────────────────────────────────── -->
-<div class="modal-overlay" id="modal-new-biz" onclick="if(event.target===this)closeModal('modal-new-biz')">
-  <div class="modal">
-    <div class="modal-title">// Nueva unidad<button class="btn btn-sm btn-icon btn-red" onclick="closeModal('modal-new-biz')">✕</button></div>
-    <div id="modal-biz-fb" class="fb-msg"></div>
-    <div class="form-group"><label class="form-label">Nombre *</label><input type="text" class="form-input" id="biz-name" placeholder="Ej: Restaurante El Buen Sabor"></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Categoría</label><select class="form-input" id="biz-cat"><option>Comercio</option><option>Servicios</option><option>Restaurante</option><option>Tecnología</option><option>Salud</option><option>Otro</option></select></div>
-      <div class="form-group"><label class="form-label">Color</label><input type="color" class="form-input" id="biz-color" value="#00c8ff" style="height:42px;cursor:pointer"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Descripción</label><textarea class="form-input" id="biz-desc" style="min-height:60px"></textarea></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn btn-sm btn-red" onclick="closeModal('modal-new-biz')">CANCELAR</button>
-      <button class="btn btn-sm" onclick="createBusiness()">CREAR</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-tx" onclick="if(event.target===this)closeModal('modal-tx')">
-  <div class="modal">
-    <div class="modal-title"><span id="tx-modal-title">// Nuevo movimiento</span><button class="btn btn-sm btn-icon btn-red" onclick="closeModal('modal-tx')">✕</button></div>
-    <div id="modal-tx-fb" class="fb-msg"></div>
-    <div class="form-group"><label class="form-label">Negocio *</label><select class="form-input" id="tx-biz"></select></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto (Q) *</label><input type="number" class="form-input" id="tx-amount" placeholder="0.00" step="0.01" min="0"></div>
-      <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="tx-date"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Descripción</label><input type="text" class="form-input" id="tx-desc" placeholder="Ej: Venta de productos..."></div>
-    <div class="form-group"><label class="form-label">Categoría</label><input type="text" class="form-input" id="tx-cat" placeholder="Ej: Ventas, Marketing..."></div>
-    <input type="hidden" id="tx-type">
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn btn-sm btn-red" onclick="closeModal('modal-tx')">CANCELAR</button>
-      <button class="btn btn-sm" onclick="createTransaction()">GUARDAR</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-biz-detail" onclick="if(event.target===this)closeModal('modal-biz-detail')">
-  <div class="modal" style="max-width:600px">
-    <div class="modal-title"><span id="detail-title">// Negocio</span><button class="btn btn-sm btn-icon btn-red" onclick="closeModal('modal-biz-detail')">✕</button></div>
-    <div id="biz-detail-content"></div>
-  </div>
-</div>
-
-<!-- ── JARVIS ──────────────────────────────────────────────── -->
-<div id="jarvis">
-  <div class="jarvis-bubble" id="jarvis-bubble">
-    <div class="jarvis-header">
-      <div class="jarvis-avatar">🤖</div>
+    <div class="brand">
+      <div class="brand-icon">◆</div>
       <div>
-        <div class="jarvis-title">JARVIS AI</div>
-        <div class="jarvis-subtitle">GROQ // LLAMA-3.3-70B</div>
+        <div class="brand-title">CENTRO DE MANDO</div>
+        <div class="brand-sub">Núcleo Neural · Sistema de Gestión</div>
       </div>
-      <button class="jarvis-close" onclick="toggleJarvis()">✕</button>
     </div>
-    <div class="jarvis-messages" id="jarvis-messages">
-      <div class="j-msg ai">Sistema en línea. Soy tu asistente de Centro de Mando. Puedo analizar tus negocios, dar recomendaciones y responder preguntas. ¿En qué te ayudo?</div>
-    </div>
-    <div class="jarvis-input-row">
-      <input class="jarvis-input" id="jarvis-input" placeholder="Preguntá algo..." onkeydown="if(event.key==='Enter')sendJarvis()">
-      <button class="jarvis-send" onclick="sendJarvis()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--void)" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      </button>
+    <div class="topbar-right">
+      <div class="tb-stat"><span class="dot" id="dotApi"></span> API</div>
+      <div class="tb-stat"><span class="dot" id="dotGroq"></span> IA</div>
+      <div class="tb-clock mono" id="clock">00:00:00</div>
     </div>
   </div>
-  <div class="jarvis-fab" onclick="toggleJarvis()" id="jarvis-fab">🤖</div>
+
+  <div class="left-panel">
+    <div id="totalsCard"></div>
+    <div class="section-label">Negocios</div>
+    <div id="bizList"><div class="empty-msg">Cargando...</div></div>
+  </div>
+
+  <div class="center-panel">
+    <div class="sphere-wrap">
+      <canvas id="sphereCanvas" width="240" height="240"></canvas>
+      <div class="sphere-status" id="sphereStatus">EN ESPERA</div>
+    </div>
+
+    <div class="chat-area">
+      <div class="chat-messages" id="chatMessages">
+        <div class="msg system">— NUCLEO INICIALIZADO —</div>
+        <div class="msg ai">
+          <div class="msg-label">Asistente</div>
+          Hola. Puedo ver el estado de tus negocios en tiempo real. Pregúntame sobre ventas, gastos, balances o pedime un análisis.
+        </div>
+      </div>
+      <div class="input-row">
+        <input id="userInput" type="text" placeholder="Preguntá algo sobre tus negocios..." maxlength="500"/>
+        <button class="icon-btn" id="micBtn" title="Hablar">MIC</button>
+        <button class="icon-btn" id="voiceToggle" title="Leer respuestas en voz alta">VOZ</button>
+        <button class="icon-btn send" id="sendBtn" title="Enviar">→</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="section-label">Actividad reciente</div>
+    <div id="txList"><div class="empty-msg">Cargando...</div></div>
+  </div>
+
 </div>
 
-<script>
-// ══════════════════════════════════════════════════════════════
-// PARTICLES ENGINE
-// ══════════════════════════════════════════════════════════════
-const canvas = document.getElementById('canvas');
-const ctx2 = canvas.getContext('2d');
-let particles = [];
-let animFrame;
-
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-
-function initParticles() {
-  particles = [];
-  const count = Math.floor((canvas.width * canvas.height) / 14000);
-  for (let i = 0; i < count; i++) {
-    particles.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: (Math.random() - 0.5) * 0.3,
-      size: Math.random() * 1.5 + 0.3,
-      alpha: Math.random() * 0.4 + 0.05,
-      pulse: Math.random() * Math.PI * 2,
-      color: Math.random() > 0.85 ? '#00ff88' : Math.random() > 0.7 ? '#ffaa00' : '#00c8ff'
-    });
-  }
-}
-
-function drawParticles() {
-  ctx2.clearRect(0, 0, canvas.width, canvas.height);
-  const t = Date.now() * 0.001;
-
-  particles.forEach((p, i) => {
-    p.x += p.vx;
-    p.y += p.vy;
-    p.pulse += 0.02;
-
-    if (p.x < 0) p.x = canvas.width;
-    if (p.x > canvas.width) p.x = 0;
-    if (p.y < 0) p.y = canvas.height;
-    if (p.y > canvas.height) p.y = 0;
-
-    const alpha = p.alpha * (0.7 + 0.3 * Math.sin(p.pulse));
-
-    // Draw particle
-    ctx2.beginPath();
-    ctx2.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx2.fillStyle = p.color.replace(')', `,${alpha})`).replace('rgb', 'rgba').replace('#00c8ff', `rgba(0,200,255,${alpha})`).replace('#00ff88', `rgba(0,255,136,${alpha})`).replace('#ffaa00', `rgba(255,170,0,${alpha})`);
-
-    // Simple color set
-    if (p.color === '#00c8ff') ctx2.fillStyle = `rgba(0,200,255,${alpha})`;
-    else if (p.color === '#00ff88') ctx2.fillStyle = `rgba(0,255,136,${alpha})`;
-    else ctx2.fillStyle = `rgba(255,170,0,${alpha})`;
-    ctx2.fill();
-
-    // Connect nearby particles
-    for (let j = i + 1; j < particles.length; j++) {
-      const p2 = particles[j];
-      const dx = p.x - p2.x, dy = p.y - p2.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if (dist < 100) {
-        ctx2.beginPath();
-        ctx2.moveTo(p.x, p.y);
-        ctx2.lineTo(p2.x, p2.y);
-        ctx2.strokeStyle = `rgba(0,200,255,${0.06 * (1 - dist/100)})`;
-        ctx2.lineWidth = 0.5;
-        ctx2.stroke();
-      }
-    }
-  });
-
-  animFrame = requestAnimationFrame(drawParticles);
-}
-
-window.addEventListener('resize', () => { resizeCanvas(); initParticles(); });
-resizeCanvas();
-initParticles();
-drawParticles();
-
-// ══════════════════════════════════════════════════════════════
-// CLOCK
-// ══════════════════════════════════════════════════════════════
-function updateClock() {
-  const now = new Date();
-  document.getElementById('clock').textContent =
-    String(now.getHours()).padStart(2,'0') + ':' +
-    String(now.getMinutes()).padStart(2,'0') + ':' +
-    String(now.getSeconds()).padStart(2,'0');
-}
-setInterval(updateClock, 1000);
-updateClock();
-
-// ══════════════════════════════════════════════════════════════
-// CONFIG & API
-// ══════════════════════════════════════════════════════════════
-let API = 'https://dasheconmico-production-0e57.up.railway.app';
-let businesses = [], allPosts = [];
-let netState = { fb: false, tg: false };
-let currentPostFilter = '';
-const LABELS = {
-  dashboard:'// DASHBOARD', businesses:'// NEGOCIOS', finances:'// FINANZAS',
-  compose:'// PUBLICIDAD', posts:'// PUBLICACIONES', comparison:'// ANÁLISIS', setup:'// CONFIGURACIÓN'
-};
-
-async function api(path, opts={}) {
-  if (!API) return { ok: false, error: 'Servidor no configurado' };
-  try {
-    const res = await fetch(API + path, {
-      ...opts,
-      headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) },
-      body: opts.body ? JSON.stringify(opts.body) : undefined
-    });
-    return await res.json();
-  } catch(e) { return { ok: false, error: e.message }; }
-}
-
-function fmt(n) { return 'Q ' + parseFloat(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function today() { return new Date().toISOString().split('T')[0]; }
-function showFb(id, msg, type='ok') {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = msg; el.className = 'fb-msg ' + type; el.style.display = 'block';
-  if (type !== 'load') setTimeout(() => el.style.display='none', 4500);
-}
-
-// ══════════════════════════════════════════════════════════════
-// NAV
-// ══════════════════════════════════════════════════════════════
-function nav(page, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nb').forEach(b => b.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
-  if (btn) btn.classList.add('active');
-  document.getElementById('page-label').textContent = LABELS[page] || page;
-  const loaders = { dashboard:loadDashboard, businesses:loadBusinesses, finances:loadTransactions, posts:loadPosts, comparison:loadComparison };
-  if (loaders[page]) loaders[page]();
-  if (page === 'compose') populateBusinessSelects();
-}
-
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-function toggleStep(id) { const el=document.getElementById(id); el.style.display=el.style.display==='none'?'block':'none'; }
-
-// ══════════════════════════════════════════════════════════════
-// SERVER
-// ══════════════════════════════════════════════════════════════
-function saveServerUrl() {
-  const url = document.getElementById('server-url').value.trim().replace(/\/$/,'');
-  if (!url) return;
-  API = url;
-  checkServer();
-}
-
-async function checkServer() {
-  const el = document.getElementById('server-status');
-  if (!API) return;
-  el.textContent = 'VERIFICANDO...'; el.style.color = 'var(--text3)';
-  const r = await api('/api/health');
-  if (r.ok) {
-    el.textContent = '✓ CONECTADO — ' + API; el.style.color = 'var(--green)';
-    document.getElementById('api-status').textContent = '● ONLINE';
-    document.getElementById('api-status').style.color = 'var(--green)';
-    loadInit();
-  } else {
-    el.textContent = '✗ ERROR: ' + (r.error||'No disponible'); el.style.color = 'var(--red)';
-    document.getElementById('api-status').textContent = '● OFFLINE';
-    document.getElementById('api-status').style.color = 'var(--red)';
-  }
-}
-
-async function loadInit() {
-  const r = await api('/api/businesses');
-  if (r.ok) {
-    businesses = r.businesses;
-    document.getElementById('biz-badge').textContent = businesses.length;
-    populateBusinessSelects();
-    updateConnStatus();
-  }
-  loadDashboard();
-}
-
-async function updateConnStatus() {
-  const r = await api('/api/config');
-  if (!r.ok) return;
-  const hasTg = r.config?.tg_token && r.config.tg_token !== '••••••';
-  const hasFb = r.config?.fb_token && r.config.fb_token !== '••••••';
-  document.getElementById('dot-tg').className = 'conn-dot' + (hasTg?' on':'');
-  document.getElementById('dot-fb').className = 'conn-dot' + (hasFb?' on':'');
-}
-
-function populateBusinessSelects() {
-  const opts = businesses.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
-  ['post-biz','fin-biz-filter','posts-biz-filter','tx-biz'].forEach(id => {
-    const el = document.getElementById(id); if (!el) return;
-    const isFilter = id.includes('filter');
-    el.innerHTML = (isFilter ? '<option value="">TODOS LOS NEGOCIOS</option>' : '<option value="">— Sin asignar —</option>') + opts;
-  });
-}
-
-// ══════════════════════════════════════════════════════════════
-// DASHBOARD
-// ══════════════════════════════════════════════════════════════
-async function loadDashboard() {
-  const [rb, rp] = await Promise.all([api('/api/businesses'), api('/api/posts')]);
-  if (rb.ok) {
-    businesses = rb.businesses;
-    const totalBal = businesses.reduce((s,b) => s + parseFloat(b.balance||0), 0);
-    document.getElementById('dm-biz').textContent = businesses.length;
-    document.getElementById('dm-balance').textContent = fmt(totalBal);
-    document.getElementById('dm-balance').className = 'm-value ' + (totalBal>=0?'green':'red');
-    setTimeout(() => { document.getElementById('bar-biz').style.width = Math.min(businesses.length*20,100)+'%'; }, 100);
-    setTimeout(() => { document.getElementById('bar-balance').style.width = totalBal >= 0 ? '70%' : '30%'; }, 200);
-
-    document.getElementById('dash-biz-list').innerHTML = businesses.length
-      ? businesses.map(b => `
-        <div class="tx-item" style="cursor:default">
-          <div style="width:8px;height:8px;border-radius:50%;background:${b.color};box-shadow:0 0 8px ${b.color};flex-shrink:0"></div>
-          <div style="flex:1;font-size:12px;font-weight:600;font-family:var(--ui)">${b.name}</div>
-          <div style="font-family:var(--display);font-size:12px;font-weight:700;color:${parseFloat(b.balance)>=0?'var(--green)':'var(--red)'}">${fmt(b.balance)}</div>
-        </div>`).join('')
-      : '<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:20px">SIN NEGOCIOS</div>';
-  }
-  if (rp.ok) {
-    allPosts = rp.posts;
-    const published = rp.posts.filter(p=>p.status==='published').length;
-    const scheduled = rp.posts.filter(p=>p.status==='scheduled').length;
-    document.getElementById('dm-posts').textContent = published;
-    document.getElementById('dm-sched').textContent = scheduled;
-    document.getElementById('posts-badge').textContent = rp.posts.length;
-    setTimeout(() => { document.getElementById('bar-posts').style.width = Math.min(published*10,100)+'%'; }, 300);
-    setTimeout(() => { document.getElementById('bar-sched').style.width = Math.min(scheduled*20,100)+'%'; }, 400);
-
-    document.getElementById('dash-posts-list').innerHTML = rp.posts.slice(0,6).map(p => `
-      <div class="tx-item" style="cursor:default">
-        <div style="font-size:14px">${p.network==='fb'?'📘':'💬'}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--ui)">${p.content}</div>
-          <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:2px">${p.business_name||'—'}</div>
-        </div>
-        <span class="tag tag-${p.status}">${{draft:'DRAFT',scheduled:'PROG',published:'LIVE',failed:'ERR'}[p.status]}</span>
-      </div>`).join('') || '<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:20px">SIN PUBLICACIONES</div>';
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// BUSINESSES
-// ══════════════════════════════════════════════════════════════
-async function loadBusinesses() {
-  const r = await api('/api/businesses');
-  if (!r.ok) return;
-  businesses = r.businesses;
-  document.getElementById('biz-badge').textContent = businesses.length;
-  populateBusinessSelects();
-  if (!businesses.length) {
-    document.getElementById('biz-grid').innerHTML = '<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:40px;grid-column:1/-1">SIN NEGOCIOS — CREA UNO PARA COMENZAR</div>';
-    return;
-  }
-  document.getElementById('biz-grid').innerHTML = businesses.map((b,i) => `
-    <div class="biz-card animate-in" style="animation-delay:${i*0.06}s" onclick="openBizDetail(${b.id})">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <div class="biz-dot" style="background:${b.color};color:${b.color}"></div>
-        <div>
-          <div class="biz-name">${b.name}</div>
-          <div class="biz-cat">${b.category}</div>
-        </div>
-      </div>
-      ${b.description ? `<div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:12px;letter-spacing:0.5px">${b.description}</div>` : ''}
-      <div class="biz-stats">
-        <div class="biz-stat"><div class="biz-stat-val" style="color:var(--green)">${fmt(b.total_income)}</div><div class="biz-stat-lab">INGRESOS</div></div>
-        <div class="biz-stat"><div class="biz-stat-val" style="color:var(--red)">${fmt(b.total_expense)}</div><div class="biz-stat-lab">GASTOS</div></div>
-        <div class="biz-stat"><div class="biz-stat-val" style="color:${parseFloat(b.balance)>=0?'var(--cyan)':'var(--red)'}">${fmt(b.balance)}</div><div class="biz-stat-lab">BALANCE</div></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:12px;font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:1px">
-        <span>TX:${b.transaction_count}</span><span>POSTS:${b.post_count}</span>
-      </div>
-    </div>`).join('');
-}
-
-async function createBusiness() {
-  const name = document.getElementById('biz-name').value.trim();
-  if (!name) return showFb('modal-biz-fb','⚠ NOMBRE REQUERIDO','err');
-  const r = await api('/api/businesses',{method:'POST',body:{name,description:document.getElementById('biz-desc').value,category:document.getElementById('biz-cat').value,color:document.getElementById('biz-color').value}});
-  if (r.ok) { showFb('modal-biz-fb','✓ NEGOCIO CREADO','ok'); setTimeout(()=>{closeModal('modal-new-biz');document.getElementById('biz-name').value='';loadBusinesses();},1200); }
-  else showFb('modal-biz-fb','✗ '+r.error,'err');
-}
-
-async function openBizDetail(id) {
-  const r = await api('/api/businesses/'+id);
-  if (!r.ok) return;
-  const b = r.business; const txs = r.transactions;
-  document.getElementById('detail-title').textContent = '// ' + b.name.toUpperCase();
-  document.getElementById('biz-detail-content').innerHTML = `
-    <div class="metrics" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
-      <div class="metric-card"><div class="m-label">Ingresos</div><div class="m-value green">${fmt(txs.filter(t=>t.type==='income').reduce((s,t)=>s+parseFloat(t.amount),0))}</div></div>
-      <div class="metric-card"><div class="m-label">Gastos</div><div class="m-value red">${fmt(txs.filter(t=>t.type==='expense').reduce((s,t)=>s+parseFloat(t.amount),0))}</div></div>
-      <div class="metric-card"><div class="m-label">Posts</div><div class="m-value">${r.posts.length}</div></div>
-    </div>
-    <div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:2px;margin-bottom:10px">// ÚLTIMOS MOVIMIENTOS</div>
-    ${txs.slice(0,6).map(t=>`
-      <div class="tx-item">
-        <div class="tx-icon ${t.type}">${t.type==='income'?'↑':'↓'}</div>
-        <div style="flex:1"><div class="tx-desc">${t.description||t.category}</div><div class="tx-meta">${t.date}</div></div>
-        <div class="tx-amount ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
-      </div>`).join('') || '<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:20px">SIN MOVIMIENTOS</div>'}`;
-  openModal('modal-biz-detail');
-}
-
-// ══════════════════════════════════════════════════════════════
-// TRANSACTIONS
-// ══════════════════════════════════════════════════════════════
-async function loadTransactions() {
-  const bizId = document.getElementById('fin-biz-filter').value;
-  const r = await api('/api/transactions'+(bizId?'?business_id='+bizId:''));
-  if (!r.ok) return;
-  const txs = r.transactions;
-  let income=0, expense=0;
-  txs.forEach(t=>{ if(t.type==='income') income+=parseFloat(t.amount); else expense+=parseFloat(t.amount); });
-  const bal = income - expense;
-  document.getElementById('fin-income').textContent = fmt(income);
-  document.getElementById('fin-expense').textContent = fmt(expense);
-  document.getElementById('fin-balance').textContent = fmt(bal);
-  document.getElementById('fin-balance').className = 'm-value '+(bal>=0?'green':'red');
-  document.getElementById('tx-list').innerHTML = txs.length
-    ? txs.map(t=>`
-      <div class="tx-item">
-        <div class="tx-icon ${t.type}">${t.type==='income'?'↑':'↓'}</div>
-        <div style="flex:1;min-width:0">
-          <div class="tx-desc">${t.description||'—'}</div>
-          <div class="tx-meta">${t.date} · ${t.category} · <span style="color:${t.business_color||'var(--text3)'}">${t.business_name||'—'}</span></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="tx-amount ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
-          <button class="btn btn-sm btn-icon btn-red" onclick="deleteTx(${t.id})">✕</button>
-        </div>
-      </div>`).join('')
-    : '<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:30px">SIN MOVIMIENTOS</div>';
-}
-
-function openTxModal(type) {
-  document.getElementById('tx-type').value = type;
-  document.getElementById('tx-modal-title').textContent = '// '+(type==='income'?'NUEVO INGRESO':'NUEVO GASTO');
-  document.getElementById('tx-date').value = today();
-  openModal('modal-tx');
-}
-
-async function createTransaction() {
-  const bizId=document.getElementById('tx-biz').value, amount=document.getElementById('tx-amount').value, type=document.getElementById('tx-type').value;
-  if (!bizId) return showFb('modal-tx-fb','⚠ SELECCIONA UN NEGOCIO','err');
-  if (!amount||parseFloat(amount)<=0) return showFb('modal-tx-fb','⚠ MONTO INVÁLIDO','err');
-  const r = await api('/api/transactions',{method:'POST',body:{business_id:bizId,type,amount,description:document.getElementById('tx-desc').value,category:document.getElementById('tx-cat').value,date:document.getElementById('tx-date').value}});
-  if (r.ok) { showFb('modal-tx-fb','✓ GUARDADO','ok'); setTimeout(()=>{closeModal('modal-tx');document.getElementById('tx-amount').value='';document.getElementById('tx-desc').value='';loadTransactions();},1200); }
-  else showFb('modal-tx-fb','✗ '+r.error,'err');
-}
-
-async function deleteTx(id) {
-  if (!confirm('¿Eliminar este movimiento?')) return;
-  await api('/api/transactions/'+id,{method:'DELETE'});
-  loadTransactions();
-}
-
-// ══════════════════════════════════════════════════════════════
-// NET TOGGLE
-// ══════════════════════════════════════════════════════════════
-function toggleNet(n) {
-  netState[n] = !netState[n];
-  const el = document.getElementById('tog-'+n);
-  if (netState[n]) el.className = 'net-btn active-'+n;
-  else el.className = 'net-btn';
-}
-
-// ══════════════════════════════════════════════════════════════
-// POSTS
-// ══════════════════════════════════════════════════════════════
-async function savePost(status) {
-  const content=document.getElementById('post-text').value.trim();
-  const nets=Object.keys(netState).filter(k=>netState[k]);
-  if (!content) return showFb('compose-fb','⚠ ESCRIBE EL CONTENIDO','err');
-  if (!nets.length) return showFb('compose-fb','⚠ SELECCIONA UNA RED','err');
-  const bizId=document.getElementById('post-biz').value||null;
-  const date=document.getElementById('post-date').value, time=document.getElementById('post-time').value;
-  const scheduled_at=date?new Date(date+'T'+time).toISOString():null;
-  showFb('compose-fb','PROCESANDO...','load');
-  for (const net of nets) {
-    const r=await api('/api/posts',{method:'POST',body:{business_id:bizId,network:net,content,status,scheduled_at}});
-    if (!r.ok) return showFb('compose-fb','✗ '+r.error,'err');
-  }
-  showFb('compose-fb','✓ '+(status==='draft'?'BORRADOR GUARDADO':'POST PROGRAMADO'),'ok');
-  document.getElementById('post-text').value='';
-  netState={fb:false,tg:false};
-  ['fb','tg'].forEach(n=>{document.getElementById('tog-'+n).className='net-btn';});
-}
-
-async function saveAndPublishNow() {
-  const content=document.getElementById('post-text').value.trim();
-  const nets=Object.keys(netState).filter(k=>netState[k]);
-  if (!content) return showFb('compose-fb','⚠ ESCRIBE EL CONTENIDO','err');
-  if (!nets.length) return showFb('compose-fb','⚠ SELECCIONA UNA RED','err');
-  showFb('compose-fb','PUBLICANDO...','load');
-  const bizId=document.getElementById('post-biz').value||null;
-  for (const net of nets) {
-    const cr=await api('/api/posts',{method:'POST',body:{business_id:bizId,network:net,content,status:'draft'}});
-    if (!cr.ok) return showFb('compose-fb','✗ '+cr.error,'err');
-    const pr=await api('/api/posts/'+cr.post.id+'/publish',{method:'POST'});
-    showFb('compose-fb',pr.ok?'✓ '+pr.message:'✗ '+pr.message,pr.ok?'ok':'err');
-  }
-  document.getElementById('post-text').value='';
-}
-
-async function loadPosts() {
-  const bizId=document.getElementById('posts-biz-filter').value;
-  let url='/api/posts'; const params=[];
-  if (bizId) params.push('business_id='+bizId);
-  if (currentPostFilter) params.push('status='+currentPostFilter);
-  if (params.length) url+='?'+params.join('&');
-  const r=await api(url); if (!r.ok) return;
-  document.getElementById('posts-badge').textContent=r.posts.length;
-  renderPostsList(r.posts);
-}
-
-function loadPostsFiltered(status) {
-  currentPostFilter=status;
-  document.getElementById('posts-list-main').innerHTML='';
-  loadPosts();
-}
-
-function renderPostsList(posts) {
-  const el=document.getElementById('posts-list-main');
-  if (!posts.length) { el.innerHTML='<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:40px">SIN PUBLICACIONES</div>'; return; }
-  el.innerHTML=posts.map((p,i)=>`
-    <div class="post-item animate-in" style="animation-delay:${i*0.04}s">
-      <div class="net-av ${p.network}">${p.network==='fb'?'📘':'💬'}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--ui)">${p.content}</div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
-          <span class="tag tag-${p.status}">${{draft:'DRAFT',scheduled:'PROG',published:'LIVE',failed:'ERR'}[p.status]}</span>
-          ${p.business_name?`<span style="font-family:var(--mono);font-size:9px;color:${p.business_color||'var(--cyan)'};border:1px solid;border-color:${p.business_color||'var(--border2)'};padding:1px 6px;border-radius:2px">${p.business_name}</span>`:''}
-          ${p.scheduled_at?`<span style="font-family:var(--mono);font-size:9px;color:var(--text3)">${new Date(p.scheduled_at).toLocaleString('es-GT')}</span>`:''}
-          ${p.reach?`<span style="font-family:var(--mono);font-size:9px;color:var(--text3)">👁${p.reach} 🖱${p.clicks||0}</span>`:''}
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        ${p.status==='draft'||p.status==='scheduled'?`<button class="btn btn-sm btn-green" onclick="publishPost(${p.id})">▶</button>`:''}
-        <button class="btn btn-sm btn-icon btn-red" onclick="deletePost(${p.id})">✕</button>
-      </div>
-    </div>`).join('');
-}
-
-async function publishPost(id) { const r=await api('/api/posts/'+id+'/publish',{method:'POST'}); alert(r.message||r.error); loadPosts(); }
-async function deletePost(id) { if (!confirm('¿Eliminar?')) return; await api('/api/posts/'+id,{method:'DELETE'}); loadPosts(); }
-
-// ══════════════════════════════════════════════════════════════
-// COMPARISON
-// ══════════════════════════════════════════════════════════════
-async function loadComparison() {
-  const r=await api('/api/posts/stats/comparison'); if (!r.ok) return;
-  const posts=r.posts;
-  document.getElementById('comp-reach').innerHTML=posts.length
-    ?posts.slice(0,5).map((p,i)=>`
-      <div class="comp-row">
-        <div class="comp-rank ${i===0?'gold':''}">${i+1}</div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:2px">
-            <span>${p.network==='fb'?'📘':'💬'}</span>
-            ${p.business_name?`<span style="font-family:var(--mono);font-size:8px;color:${p.business_color||'var(--cyan)'};border:1px solid;border-color:${p.business_color||'var(--border2)'};padding:1px 5px;border-radius:2px">${p.business_name}</span>`:''}
-          </div>
-          <div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${p.content}</div>
-          <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:2px">👁 ${p.reach} · 🖱 ${p.clicks}</div>
-        </div>
-      </div>`).join('')
-    :'<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:20px">SIN DATOS</div>';
-
-  const bizMap={};
-  posts.forEach(p=>{const n=p.business_name||'Sin negocio';if(!bizMap[n])bizMap[n]={reach:0,posts:0,color:p.business_color||'var(--cyan)'};bizMap[n].reach+=parseInt(p.reach||0);bizMap[n].posts++;});
-  const maxR=Math.max(...Object.values(bizMap).map(b=>b.reach),1);
-  document.getElementById('comp-biz').innerHTML=Object.entries(bizMap).map(([name,d])=>`
-    <div style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;margin-bottom:4px;letter-spacing:0.5px">
-        <span style="color:${d.color}">${name}</span>
-        <span style="color:var(--text3)">${d.reach} alcance · ${d.posts} posts</span>
-      </div>
-      <div class="prog"><div class="prog-fill" style="width:${Math.round(d.reach/maxR*100)}%;background:${d.color};box-shadow:0 0 6px ${d.color}"></div></div>
-    </div>`).join('')||'<div style="color:var(--text3);font-family:var(--mono);font-size:10px;text-align:center;padding:20px">SIN DATOS</div>';
-
-  const allR=await api('/api/posts?status=published');
-  if (allR.ok) document.getElementById('stat-post-sel').innerHTML=allR.posts.map(p=>`<option value="${p.id}">[${p.network.toUpperCase()}] ${p.content.slice(0,50)}...</option>`).join('');
-}
-
-async function updateStats() {
-  const id=document.getElementById('stat-post-sel').value;
-  if (!id) return showFb('stat-fb','⚠ SELECCIONA UN POST','err');
-  const r=await api('/api/posts/'+id+'/stats',{method:'PATCH',body:{reach:parseInt(document.getElementById('stat-reach').value)||0,clicks:parseInt(document.getElementById('stat-clicks').value)||0}});
-  showFb('stat-fb',r.ok?'✓ ACTUALIZADO':'✗ '+r.error,r.ok?'ok':'err');
-  if (r.ok) loadComparison();
-}
-
-// ══════════════════════════════════════════════════════════════
-// SETUP
-// ══════════════════════════════════════════════════════════════
-async function saveApiConfig(net) {
-  const token=document.getElementById('cfg-'+net+'-token').value.trim();
-  const extra=net==='tg'?document.getElementById('cfg-tg-chatid')?.value.trim():document.getElementById('cfg-fb-pageid')?.value.trim();
-  if (!token) return showFb('setup-fb','⚠ INGRESA EL TOKEN','err');
-  showFb('setup-fb','GUARDANDO...','load');
-  const r1=await api('/api/config',{method:'POST',body:{key:net+'_token',value:token}});
-  const r2=extra?await api('/api/config',{method:'POST',body:{key:net==='tg'?'tg_chatid':'fb_pageid',value:extra}}):{ok:true};
-  if (r1.ok&&r2.ok) { showFb('setup-fb','✓ CREDENCIALES GUARDADAS','ok'); document.getElementById('num-'+net).className='step-num done'; document.getElementById('num-'+net).textContent='✓'; updateConnStatus(); }
-  else showFb('setup-fb','✗ '+(r1.error||r2.error),'err');
-}
-
-async function testApi(net) {
-  showFb('setup-fb','PROBANDO CONEXIÓN...','load');
-  const tp=await api('/api/posts',{method:'POST',body:{network:net,content:'Test de conexión — Centro de Mando',status:'draft'}});
-  if (!tp.ok) return showFb('setup-fb','✗ '+tp.error,'err');
-  const pub=await api('/api/posts/'+tp.post.id+'/publish',{method:'POST'});
-  showFb('setup-fb',pub.ok?'✓ '+pub.message:'✗ '+(pub.message||pub.error),pub.ok?'ok':'err');
-}
-
-// ══════════════════════════════════════════════════════════════
-// JARVIS — GROQ DIRECT INTEGRATION
-// ══════════════════════════════════════════════════════════════
-let jarvisOpen = false;
-let jarvisHistory = [];
-
-function toggleJarvis() {
-  jarvisOpen = !jarvisOpen;
-  document.getElementById('jarvis-bubble').className = 'jarvis-bubble' + (jarvisOpen?' open':'');
-  document.getElementById('jarvis-fab').style.display = jarvisOpen ? 'none' : 'flex';
-  if (jarvisOpen) setTimeout(()=>document.getElementById('jarvis-input').focus(), 100);
-}
-
-async function sendJarvis() {
-  const input = document.getElementById('jarvis-input');
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-
-  addJarvisMsg(text, 'user');
-  const thinkEl = addJarvisMsg('Pensando', 'ai thinking');
-
-  // Build context from loaded data
-  const bizContext = businesses.map(b =>
-    `${b.name}: ingresos Q${parseFloat(b.total_income||0).toFixed(2)}, gastos Q${parseFloat(b.total_expense||0).toFixed(2)}, balance Q${parseFloat(b.balance||0).toFixed(2)}`
-  ).join('\n') || 'Sin datos de negocios cargados';
-
-  jarvisHistory.push({ role: 'user', content: text });
-  if (jarvisHistory.length > 10) jarvisHistory = jarvisHistory.slice(-10);
-
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: `Sos JARVIS, el asistente inteligente de "Centro de Mando", un sistema de gestión de negocios para Guatemala. Respondés en español guatemalteco informal, sos directo, útil y conciso. Máximo 150 palabras por respuesta.
-
-DATOS ACTUALES DE LOS NEGOCIOS:
-${bizContext}
-
-Podés dar análisis, consejos, proyecciones y responder preguntas sobre los negocios. Si no tenés datos suficientes, decilo claramente.`,
-        messages: jarvisHistory
-      })
-    });
-
-    const data = await res.json();
-    const reply = data.content?.[0]?.text || 'No pude procesar eso. Intentá de nuevo.';
-
-    jarvisHistory.push({ role: 'assistant', content: reply });
-    thinkEl.className = 'j-msg ai';
-    thinkEl.textContent = reply;
-  } catch(e) {
-    thinkEl.className = 'j-msg ai';
-    thinkEl.textContent = 'Error de conexión con IA. Verificá tu configuración.';
-  }
-
-  const msgs = document.getElementById('jarvis-messages');
-  msgs.scrollTop = msgs.scrollHeight;
-}
-
-function addJarvisMsg(text, type) {
-  const msgs = document.getElementById('jarvis-messages');
-  const el = document.createElement('div');
-  el.className = 'j-msg ' + type;
-  el.textContent = text;
-  msgs.appendChild(el);
-  msgs.scrollTop = msgs.scrollHeight;
-  return el;
-}
-
-// ══════════════════════════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════════════════════════
-document.getElementById('post-date').value = today();
-document.getElementById('server-url').value = API;
-checkServer();
-</script>
+<script src="/app.js"></script>
 </body>
 </html>
