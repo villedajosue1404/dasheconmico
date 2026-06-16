@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://unpkg.com/3d-force-graph"></script>
+  <style> body { margin: 0; background: #0d1117; } </style>
+</head>
+<body>
+  <div id="3d-graph"></div>
+  <script>
+    fetch('graph.json')
+      .then(res => res.json())
+      .then(data => {
+        const graphData = {
+          nodes: data.nodes,
+          links: data.links || data.edges
+        };
+        ForceGraph3D()
+          (document.getElementById('3d-graph'))
+          .graphData(graphData)
+          .nodeLabel(node => node.id || node.name)
+          .nodeAutoColorBy('community')
+          .linkDirectionalParticles(2)
+          .linkDirectionalParticleWidth(1.5);
+      });
+  </script>
+</body>
+</html>
