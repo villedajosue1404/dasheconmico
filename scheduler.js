@@ -8,6 +8,14 @@ async function getConfig(key) {
   return r.rows[0] ? r.rows[0].value : null;
 }
 
+let ADMIN_USER_ID = null;
+async function getAdminUserId() {
+  if (ADMIN_USER_ID) return ADMIN_USER_ID;
+  const r = await pool.query('SELECT id FROM users ORDER BY id LIMIT 1');
+  if (r.rows.length) { ADMIN_USER_ID = r.rows[0].id; return ADMIN_USER_ID; }
+  return null;
+}
+
 // Publicar en Telegram (como bot al canal, o como usuario a un grupo)
 async function publishToTelegram(content, photoUrl) {
   // Intentar primero con userbot si está conectado
@@ -123,8 +131,8 @@ async function checkAndPublish() {
 
       await pool.query('UPDATE scheduled_posts SET last_sent=NOW() WHERE id=$1', [sp.id]);
       await pool.query(
-        'INSERT INTO posts(business_id,network,content,status,published_at) VALUES($1,$2,$3,$4,NOW())',
-        [sp.business_id || null, networks[0], sp.content, 'published']
+        'INSERT INTO posts(user_id,business_id,network,content,status,published_at) VALUES($1,$2,$3,$4,$5,NOW())',
+        [sp.user_id || await getAdminUserId(), sp.business_id || null, networks[0], sp.content, 'published']
       );
     }
   } catch(e) {

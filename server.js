@@ -5,6 +5,7 @@ const path    = require('path');
 const { initDB }                    = require('./db/schema');
 const { setupBot, registerWebhook } = require('./bot_v2');
 const { startScheduler }            = require('./scheduler');
+const { router: authRouter, authMiddleware } = require('./routes/auth');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -13,11 +14,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/api/config',       require('./routes/config'));
-app.use('/api/businesses',   require('./routes/businesses'));
-app.use('/api/transactions', require('./routes/transactions'));
-app.use('/api/posts',        require('./routes/posts'));
-app.use('/api/chat',         require('./routes/chat'));
+app.use('/api/auth', authRouter);
+
+// Rutas protegidas con auth
+app.use('/api/config',       authMiddleware, require('./routes/config'));
+app.use('/api/businesses',   authMiddleware, require('./routes/businesses'));
+app.use('/api/transactions', authMiddleware, require('./routes/transactions'));
+app.use('/api/posts',        authMiddleware, require('./routes/posts'));
+app.use('/api/chat',         authMiddleware, require('./routes/chat'));
 
 app.get('/api/health', function(req, res) {
   res.json({ ok: true, time: new Date().toISOString() });

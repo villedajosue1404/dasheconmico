@@ -80,22 +80,26 @@ function parseFilter(filter) {
 }
 
 // ── Obtener datos del período, opcionalmente filtrado por negocio ──
-async function getReportData(filter) {
+async function getReportData(filter, userId) {
   const { dateFrom, dateTo, periodLabel, businessHint } = parseFilter(filter);
 
   // Si hay hint de negocio, buscar coincidencia en DB
   let businessFilter = null;
   if (businessHint) {
     const bizSearch = await pool.query(
-      'SELECT id, name FROM businesses WHERE LOWER(name) LIKE LOWER($1) LIMIT 1',
-      [`%${businessHint}%`]
+      'SELECT id, name FROM businesses WHERE LOWER(name) LIKE LOWER($1) AND user_id=$2 LIMIT 1',
+      [`%${businessHint}%`, userId]
     );
     if (bizSearch.rows.length) businessFilter = bizSearch.rows[0];
   }
 
-  // Query negocios — si hay filtro solo ese negocio
-  const bizWhere = businessFilter ? 'AND b.id = $3' : '';
-  const bizParams = businessFilter ? [dateFrom, dateTo, businessFilter.id] : [dateFrom, dateTo];
+  // Query negocios — si hay filtro solo ese negocio, filtrar por user_id
+  const bizWhere = businessFilter
+    ? 'AND b.id = $3 AND b.user_id = $4'
+    : 'AND b.user_id = $3';
+  const bizParams = businessFilter
+    ? [dateFrom, dateTo, businessFilter.id, userId]
+    : [dateFrom, dateTo, userId];
 
   const bizQ = await pool.query(
     `SELECT b.id, b.name, b.color,
@@ -111,8 +115,12 @@ async function getReportData(filter) {
   );
 
   // Query transacciones
-  const txWhere = businessFilter ? 'AND t.business_id = $3' : '';
-  const txParams = businessFilter ? [dateFrom, dateTo, businessFilter.id] : [dateFrom, dateTo];
+  const txWhere = businessFilter
+    ? 'AND t.business_id = $3 AND t.user_id = $4'
+    : 'AND t.user_id = $3';
+  const txParams = businessFilter
+    ? [dateFrom, dateTo, businessFilter.id, userId]
+    : [dateFrom, dateTo, userId];
   const txQ = await pool.query(
     `SELECT t.date, t.type, t.amount, t.description, t.category, b.name AS business
      FROM transactions t JOIN businesses b ON b.id = t.business_id
@@ -293,15 +301,15 @@ async function compileTex(texSource) {
 }
 
 // ── generatePDF: entrada pública ──
-async function generatePDF(filter, aiAnalysis) {
-  const data = await getReportData(filter);
+async function generatePDF(filter, aiAnalysis, userId) {
+  const data = await getReportData(filter, userId);
   const tex  = buildTex(data, aiAnalysis);
   return await compileTex(tex);
 }
 
 // ── generateExcel: corregido con filtro por negocio ──
-async function generateExcel(filter) {
-  const data = await getReportData(filter);
+async function generateExcel(filter, userId) {
+  const data = await getReportData(filter, userId);
   const wb   = new ExcelJS.Workbook();
   wb.creator = 'Centro de Mando';
   wb.created = new Date();

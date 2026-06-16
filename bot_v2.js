@@ -9,6 +9,19 @@ const { generatePDF, generateExcel } = require('./reports');
 
 const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions';
 
+// El bot opera como administrador del sistema
+let ADMIN_USER_ID = null;
+
+async function getAdminUserId() {
+  if (ADMIN_USER_ID) return ADMIN_USER_ID;
+  const r = await pool.query('SELECT id FROM users ORDER BY id LIMIT 1');
+  if (r.rows.length) {
+    ADMIN_USER_ID = r.rows[0].id;
+    return ADMIN_USER_ID;
+  }
+  return null;
+}
+
 // ── Historial de conversación por usuario ──
 const history = {};
 
@@ -19,19 +32,24 @@ function addHistory(chatId, role, content) {
 }
 
 // ── Obtener contexto de la DB ──
-async function getContext() {
+async function getContext(userId) {
+  const uid = userId || await getAdminUserId();
   const biz = await pool.query(
     'SELECT b.id, b.name, b.color,' +
     'COALESCE(SUM(CASE WHEN t.type=\'income\' THEN t.amount ELSE 0 END),0) as income,' +
     'COALESCE(SUM(CASE WHEN t.type=\'expense\' THEN t.amount ELSE 0 END),0) as expense,' +
     'COALESCE(SUM(CASE WHEN t.type=\'income\' THEN t.amount ELSE -t.amount END),0) as balance ' +
-    'FROM businesses b LEFT JOIN transactions t ON t.business_id=b.id ' +
-    'GROUP BY b.id,b.name,b.color ORDER BY b.name'
+    'FROM businesses b LEFT JOIN transactions t ON t.business_id=b.id AND t.user_id=$1 ' +
+    'WHERE b.user_id=$1 ' +
+    'GROUP BY b.id,b.name,b.color ORDER BY b.name',
+    [uid]
   );
   const tx = await pool.query(
     'SELECT t.id,t.type,t.amount,t.description,t.date,b.name as business ' +
     'FROM transactions t JOIN businesses b ON b.id=t.business_id ' +
-    'ORDER BY t.created_at DESC LIMIT 8'
+    'WHERE t.user_id=$1 ' +
+    'ORDER BY t.created_at DESC LIMIT 8',
+    [uid]
   );
   return { businesses: biz.rows, transactions: tx.rows };
 }
@@ -145,6 +163,8 @@ async function think(chatId, userMessage, ctx) {
 async function execute(chatId, intent, userName, msg) {
   const a = intent.action;
 
+  const uid = await getAdminUserId();
+
   // REGISTRAR TRANSACCIÓN
   if (a === 'record') {
     const amount = parseFloat(intent.amount);
@@ -153,7 +173,7 @@ async function execute(chatId, intent, userName, msg) {
       return;
     }
     if (!intent.business_id) {
-      const biz = await pool.query('SELECT id,name FROM businesses ORDER BY name');
+      const biz = await pool.query('SELECT id,name FROM businesses WHERE user_id=$1 ORDER BY name', [uid]);
       if (biz.rows.length === 1) {
         intent.business_id = biz.rows[0].id;
       } else if (biz.rows.length > 1) {
@@ -165,7 +185,7 @@ async function execute(chatId, intent, userName, msg) {
         return;
       }
     }
-    await saveTransaction(chatId, intent.business_id, intent.type, amount, intent.description, userName);
+    await saveTransaction(chatId, intent.business_id, intent.type, amount, intent.description, userName, uid);
     return;
   }
 
@@ -176,8 +196,10 @@ async function execute(chatId, intent, userName, msg) {
       'COALESCE(SUM(CASE WHEN t.type=\'income\' THEN t.amount ELSE 0 END),0) as income,' +
       'COALESCE(SUM(CASE WHEN t.type=\'expense\' THEN t.amount ELSE 0 END),0) as expense,' +
       'COALESCE(SUM(CASE WHEN t.type=\'income\' THEN t.amount ELSE -t.amount END),0) as balance ' +
-      'FROM businesses b LEFT JOIN transactions t ON t.business_id=b.id ' +
-      'GROUP BY b.id,b.name ORDER BY balance DESC'
+      'FROM businesses b LEFT JOIN transactions t ON t.business_id=b.id AND t.user_id=$1 ' +
+      'WHERE b.user_id=$1 ' +
+      'GROUP BY b.id,b.name ORDER BY balance DESC',
+      [uid]
     );
     if (!r.rows.length) { await tgSend(chatId, 'No hay negocios todavia. Crea uno primero.'); return; }
     let reply = '<b>Balance general</b>\n\n';
@@ -203,8 +225,9 @@ async function execute(chatId, intent, userName, msg) {
       'SELECT b.name,' +
       'COALESCE(SUM(CASE WHEN t.type=\'income\' AND EXTRACT(MONTH FROM t.date)=$1 AND EXTRACT(YEAR FROM t.date)=$2 THEN t.amount ELSE 0 END),0) as income,' +
       'COALESCE(SUM(CASE WHEN t.type=\'expense\' AND EXTRACT(MONTH FROM t.date)=$1 AND EXTRACT(YEAR FROM t.date)=$2 THEN t.amount ELSE 0 END),0) as expense ' +
-      'FROM businesses b LEFT JOIN transactions t ON t.business_id=b.id GROUP BY b.id,b.name ORDER BY income DESC',
-      [m, y]
+      'FROM businesses b LEFT JOIN transactions t ON t.business_id=b.id AND t.user_id=$3 ' +
+      'WHERE b.user_id=$3 GROUP BY b.id,b.name ORDER BY income DESC',
+      [m, y, uid]
     );
     const months = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     let reply = '<b>Ventas de ' + months[m] + ' ' + y + '</b>\n\n';
@@ -220,7 +243,7 @@ async function execute(chatId, intent, userName, msg) {
 
   // LISTAR NEGOCIOS
   if (a === 'list_businesses') {
-    const r = await pool.query('SELECT name FROM businesses ORDER BY name');
+    const r = await pool.query('SELECT name FROM businesses WHERE user_id=$1 ORDER BY name', [uid]);
     if (!r.rows.length) { await tgSend(chatId, 'No hay negocios. Dime el nombre del negocio que quieres crear.'); return; }
     await tgSend(chatId, '<b>Tus negocios:</b>\n\n' + r.rows.map(function(b){return '• '+b.name;}).join('\n'));
     return;
@@ -229,11 +252,11 @@ async function execute(chatId, intent, userName, msg) {
   // CREAR NEGOCIO
   if (a === 'create_business') {
     if (!intent.name) { await tgSend(chatId, 'Dime el nombre del negocio.'); return; }
-    const ex = await pool.query('SELECT id FROM businesses WHERE LOWER(name)=LOWER($1)', [intent.name]);
+    const ex = await pool.query('SELECT id FROM businesses WHERE LOWER(name)=LOWER($1) AND user_id=$2', [intent.name, uid]);
     if (ex.rows.length) { await tgSend(chatId, 'Ya existe un negocio llamado <b>' + intent.name + '</b>.'); return; }
     const colors = ['#6c5ce7','#00b894','#e17055','#0984e3','#fdcb6e','#e84393'];
     const color = colors[Math.floor(Math.random()*colors.length)];
-    await pool.query('INSERT INTO businesses(name,category,color) VALUES($1,$2,$3)', [intent.name,'General',color]);
+    await pool.query('INSERT INTO businesses(user_id,name,category,color) VALUES($1,$2,$3,$4)', [uid, intent.name, 'General', color]);
     await tgSend(chatId, 'Negocio <b>' + intent.name + '</b> creado.');
     return;
   }
@@ -241,6 +264,8 @@ async function execute(chatId, intent, userName, msg) {
   // BORRAR NEGOCIO
   if (a === 'delete_business') {
     if (!intent.id) { await tgSend(chatId, 'No identifiqué qué negocio borrar.'); return; }
+    const bizCheck = await pool.query('SELECT id FROM businesses WHERE id=$1 AND user_id=$2', [intent.id, uid]);
+    if (!bizCheck.rows.length) { await tgSend(chatId, 'No encontré ese negocio.'); return; }
     pendingConfirm[chatId] = { type: 'delete_business', id: intent.id, name: intent.name };
     await tgSend(chatId, 'Seguro que queres borrar <b>' + intent.name + '</b> y TODAS sus transacciones?\n\nResponde <b>si</b> o <b>no</b>.');
     return;
@@ -248,7 +273,7 @@ async function execute(chatId, intent, userName, msg) {
 
   // BORRAR TRANSACCIÓN
   if (a === 'delete_tx') {
-    const tx = await pool.query('SELECT t.*,b.name as biz FROM transactions t JOIN businesses b ON b.id=t.business_id WHERE t.id=$1', [intent.id]);
+    const tx = await pool.query('SELECT t.*,b.name as biz FROM transactions t JOIN businesses b ON b.id=t.business_id WHERE t.id=$1 AND t.user_id=$2', [intent.id, uid]);
     if (!tx.rows.length) { await tgSend(chatId, 'No encontré la transacción #' + intent.id); return; }
     const t2 = tx.rows[0];
     pendingConfirm[chatId] = { type: 'delete_tx', id: intent.id, desc: t2.biz + ' Q' + parseFloat(t2.amount).toFixed(2) + ' "' + t2.description + '"' };
@@ -258,14 +283,14 @@ async function execute(chatId, intent, userName, msg) {
 
   // EDITAR TRANSACCIÓN
   if (a === 'edit_tx') {
-    const tx = await pool.query('SELECT * FROM transactions WHERE id=$1', [intent.id]);
+    const tx = await pool.query('SELECT * FROM transactions WHERE id=$1 AND user_id=$2', [intent.id, uid]);
     if (!tx.rows.length) { await tgSend(chatId, 'No encontré la transacción #' + intent.id); return; }
     if (intent.field === 'amount') {
       const amt = parseFloat(intent.value);
-      await pool.query('UPDATE transactions SET amount=$1 WHERE id=$2', [amt, intent.id]);
+      await pool.query('UPDATE transactions SET amount=$1 WHERE id=$2 AND user_id=$3', [amt, intent.id, uid]);
       await tgSend(chatId, 'Transacción #' + intent.id + ' actualizada. Nuevo monto: Q ' + amt.toFixed(2));
     } else {
-      await pool.query('UPDATE transactions SET description=$1 WHERE id=$2', [intent.value, intent.id]);
+      await pool.query('UPDATE transactions SET description=$1 WHERE id=$2 AND user_id=$3', [intent.value, intent.id, uid]);
       await tgSend(chatId, 'Transacción #' + intent.id + ' actualizada. Nueva descripción: ' + intent.value);
     }
     return;
@@ -275,7 +300,8 @@ async function execute(chatId, intent, userName, msg) {
   if (a === 'last_tx') {
     const r = await pool.query(
       'SELECT t.id,t.type,t.amount,t.description,t.date,b.name as biz FROM transactions t ' +
-      'JOIN businesses b ON b.id=t.business_id ORDER BY t.created_at DESC LIMIT 10'
+      'JOIN businesses b ON b.id=t.business_id WHERE t.user_id=$1 ORDER BY t.created_at DESC LIMIT 10',
+      [uid]
     );
     if (!r.rows.length) { await tgSend(chatId, 'No hay transacciones todavia.'); return; }
     let reply = '<b>Ultimas transacciones</b>\n\n';
@@ -293,7 +319,7 @@ async function execute(chatId, intent, userName, msg) {
     try {
       const { generateReport } = require('./ai');
       const aiText = await generateReport(intent.period || 'resumen general', chatId);
-      const buf = await generatePDF(intent.period, aiText);
+      const buf = await generatePDF(intent.period, aiText, uid);
       await tgSendDoc(chatId, buf, 'informe.pdf', '📊 Informe ' + (intent.period||'general'));
     } catch(e) {
       console.error('PDF error:', e.message);
@@ -306,7 +332,7 @@ async function execute(chatId, intent, userName, msg) {
   if (a === 'excel') {
     await tgSend(chatId, '⏳ Generando Excel...');
     try {
-      const buf = await generateExcel(intent.period);
+      const buf = await generateExcel(intent.period, uid);
       await tgSendDoc(chatId, buf, 'reporte.xlsx', '📈 Reporte Excel ' + (intent.period||'general'));
     } catch(e) {
       console.error('Excel error:', e.message);
@@ -331,8 +357,8 @@ async function execute(chatId, intent, userName, msg) {
     const days  = intent.days  || 'mon,tue,wed,thu,fri,sat,sun';
     const times = intent.times || '09:00';
     await pool.query(
-      'INSERT INTO scheduled_posts(content,networks,days,times,created_by) VALUES($1,$2,$3,$4,$5)',
-      [intent.content, 'tg,fb', days, times, userName]
+      'INSERT INTO scheduled_posts(user_id,content,networks,days,times,created_by) VALUES($1,$2,$3,$4,$5,$6)',
+      [uid, intent.content, 'tg,fb', days, times, userName]
     );
     const dayMap = {mon:'lunes',tue:'martes',wed:'miércoles',thu:'jueves',fri:'viernes',sat:'sábado',sun:'domingo'};
     const dayText = days.split(',').map(function(d){return dayMap[d]||d;}).join(', ');
@@ -342,7 +368,7 @@ async function execute(chatId, intent, userName, msg) {
 
   // LISTAR PROGRAMADOS
   if (a === 'list_scheduled') {
-    const r = await pool.query('SELECT * FROM scheduled_posts WHERE active=TRUE ORDER BY id');
+    const r = await pool.query('SELECT * FROM scheduled_posts WHERE active=TRUE AND user_id=$1 ORDER BY id', [uid]);
     if (!r.rows.length) { await tgSend(chatId, 'No hay publicaciones programadas.'); return; }
     let reply = '<b>Publicaciones programadas</b>\n\n';
     r.rows.forEach(function(sp, i) {
@@ -355,7 +381,7 @@ async function execute(chatId, intent, userName, msg) {
 
   // CANCELAR PROGRAMADO
   if (a === 'cancel_scheduled') {
-    await pool.query('UPDATE scheduled_posts SET active=FALSE WHERE id=$1', [intent.id]);
+    await pool.query('UPDATE scheduled_posts SET active=FALSE WHERE id=$1 AND user_id=$2', [intent.id, uid]);
     await tgSend(chatId, '✅ Publicación #' + intent.id + ' cancelada.');
     return;
   }
@@ -370,17 +396,17 @@ async function execute(chatId, intent, userName, msg) {
 }
 
 // ── Guardar transacción ──
-async function saveTransaction(chatId, bizId, type, amount, description, userName) {
+async function saveTransaction(chatId, bizId, type, amount, description, userName, uid) {
   const today = new Date().toISOString().split('T')[0];
   await pool.query(
-    'INSERT INTO transactions(business_id,type,amount,description,category,date) VALUES($1,$2,$3,$4,$5,$6)',
-    [bizId, type, amount, description||'', type==='income'?'Ventas':'Gastos', today]
+    'INSERT INTO transactions(user_id,business_id,type,amount,description,category,date) VALUES($1,$2,$3,$4,$5,$6,$7)',
+    [uid, bizId, type, amount, description||'', type==='income'?'Ventas':'Gastos', today]
   );
   let balText = '';
   if (bizId) {
     const r = await pool.query(
-      'SELECT COALESCE(SUM(CASE WHEN type=\'income\' THEN amount ELSE -amount END),0) as balance,b.name FROM transactions t JOIN businesses b ON b.id=t.business_id WHERE t.business_id=$1 GROUP BY b.name',
-      [bizId]
+      'SELECT COALESCE(SUM(CASE WHEN type=\'income\' THEN amount ELSE -amount END),0) as balance,b.name FROM transactions t JOIN businesses b ON b.id=t.business_id WHERE t.business_id=$1 AND t.user_id=$2 GROUP BY b.name',
+      [bizId, uid]
     );
     if (r.rows.length) balText = '\nBalance ' + r.rows[0].name + ': <b>Q ' + parseFloat(r.rows[0].balance).toFixed(2) + '</b>';
   }
@@ -438,11 +464,12 @@ async function handleMessage(msg) {
     const pc = pendingConfirm[chatId];
     delete pendingConfirm[chatId];
     if (/^si$/i.test(text.trim())) {
+      const uid = await getAdminUserId();
       if (pc.type === 'delete_business') {
-        await pool.query('DELETE FROM businesses WHERE id=$1', [pc.id]);
+        await pool.query('DELETE FROM businesses WHERE id=$1 AND user_id=$2', [pc.id, uid]);
         await tgSend(chatId, '✅ Negocio <b>' + pc.name + '</b> y todas sus transacciones borrados.');
       } else if (pc.type === 'delete_tx') {
-        await pool.query('DELETE FROM transactions WHERE id=$1', [pc.id]);
+        await pool.query('DELETE FROM transactions WHERE id=$1 AND user_id=$2', [pc.id, uid]);
         await tgSend(chatId, '✅ Transacción borrada: ' + pc.desc);
       }
     } else {
@@ -453,9 +480,10 @@ async function handleMessage(msg) {
 
   // ── SELECCIÓN DE NEGOCIO PENDIENTE ──
   if (pendingTx[chatId] && !pendingTx[chatId].waitingPhotoCaption) {
+    const uid = await getAdminUserId();
     const pt = pendingTx[chatId];
     delete pendingTx[chatId];
-    const biz = await pool.query('SELECT id,name FROM businesses ORDER BY name');
+    const biz = await pool.query('SELECT id,name FROM businesses WHERE user_id=$1 ORDER BY name', [uid]);
     let chosen = null;
     const num = parseInt(text);
     if (num >= 1 && num <= biz.rows.length) {
@@ -475,7 +503,8 @@ async function handleMessage(msg) {
   }
 
   // ── CEREBRO: GROQ DECIDE TODO ──
-  const ctx    = await getContext();
+  const uid    = await getAdminUserId();
+  const ctx    = await getContext(uid);
   const intent = await think(chatId, text, ctx);
   await execute(chatId, intent, userName, msg);
 }

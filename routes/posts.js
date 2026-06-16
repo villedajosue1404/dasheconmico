@@ -8,10 +8,11 @@ router.get('/', async (req, res) => {
   try {
     const { business_id, status } = req.query;
     let q = `SELECT p.*, b.name as business_name, b.color as business_color
-             FROM posts p LEFT JOIN businesses b ON b.id=p.business_id WHERE 1=1`;
-    const params = [];
-    if (business_id) { params.push(business_id); q += ` AND p.business_id=$${params.length}`; }
-    if (status) { params.push(status); q += ` AND p.status=$${params.length}`; }
+             FROM posts p LEFT JOIN businesses b ON b.id=p.business_id WHERE p.user_id=$1`;
+    const params = [req.userId];
+    let idx = 1;
+    if (business_id) { params.push(business_id); q += ` AND p.business_id=$${++idx}`; }
+    if (status) { params.push(status); q += ` AND p.status=$${++idx}`; }
     q += ' ORDER BY p.created_at DESC LIMIT 100';
     const r = await pool.query(q, params);
     res.json({ ok: true, posts: r.rows });
@@ -26,8 +27,8 @@ router.post('/', async (req, res) => {
   if (!network || !content) return res.status(400).json({ ok: false, error: 'network y content requeridos' });
   try {
     const r = await pool.query(
-      'INSERT INTO posts(business_id,network,content,status,scheduled_at) VALUES($1,$2,$3,$4,$5) RETURNING *',
-      [business_id || null, network, content, status || 'draft', scheduled_at || null]
+      'INSERT INTO posts(user_id,business_id,network,content,status,scheduled_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',
+      [req.userId, business_id || null, network, content, status || 'draft', scheduled_at || null]
     );
     res.json({ ok: true, post: r.rows[0] });
   } catch (e) {
@@ -38,7 +39,7 @@ router.post('/', async (req, res) => {
 // PUBLISH NOW to Telegram
 router.post('/:id/publish', async (req, res) => {
   try {
-    const r = await pool.query('SELECT * FROM posts WHERE id=$1', [req.params.id]);
+    const r = await pool.query('SELECT * FROM posts WHERE id=$1 AND user_id=$2', [req.params.id, req.userId]);
     if (!r.rows.length) return res.status(404).json({ ok: false, error: 'Post no encontrado' });
     const post = r.rows[0];
 
@@ -89,9 +90,10 @@ router.patch('/:id/stats', async (req, res) => {
   const { reach, clicks } = req.body;
   try {
     const r = await pool.query(
-      'UPDATE posts SET reach=$1, clicks=$2 WHERE id=$3 RETURNING *',
-      [reach || 0, clicks || 0, req.params.id]
+      'UPDATE posts SET reach=$1, clicks=$2 WHERE id=$3 AND user_id=$4 RETURNING *',
+      [reach || 0, clicks || 0, req.params.id, req.userId]
     );
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: 'No encontrado' });
     res.json({ ok: true, post: r.rows[0] });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -101,7 +103,8 @@ router.patch('/:id/stats', async (req, res) => {
 // DELETE post
 router.delete('/:id', async (req, res) => {
   try {
-    await pool.query('DELETE FROM posts WHERE id=$1', [req.params.id]);
+    const r = await pool.query('DELETE FROM posts WHERE id=$1 AND user_id=$2 RETURNING id', [req.params.id, req.userId]);
+    if (!r.rows.length) return res.status(404).json({ ok: false, error: 'No encontrado' });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -116,10 +119,10 @@ router.get('/stats/comparison', async (req, res) => {
              b.name as business_name, b.color as business_color
       FROM posts p
       LEFT JOIN businesses b ON b.id=p.business_id
-      WHERE p.status='published'
+      WHERE p.status='published' AND p.user_id=$1
       ORDER BY p.reach DESC
       LIMIT 20
-    `);
+    `, [req.userId]);
     res.json({ ok: true, posts: r.rows });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });

@@ -14,19 +14,23 @@ router.post('/', async (req, res) => {
   if (!key) return res.json({ ok: true, reply: 'No tengo IA configurada (falta GROQ_API_KEY).' });
 
   try {
-    // Contexto financiero
+    // Contexto financiero del usuario autenticado
     const biz = await pool.query(
       'SELECT b.name,' +
       'COALESCE(SUM(CASE WHEN t.type=\'income\' THEN t.amount ELSE 0 END),0) as income,' +
       'COALESCE(SUM(CASE WHEN t.type=\'expense\' THEN t.amount ELSE 0 END),0) as expense,' +
       'COALESCE(SUM(CASE WHEN t.type=\'income\' THEN t.amount ELSE -t.amount END),0) as balance ' +
-      'FROM businesses b LEFT JOIN transactions t ON t.business_id=b.id ' +
-      'GROUP BY b.id,b.name ORDER BY b.name'
+      'FROM businesses b LEFT JOIN transactions t ON t.business_id=b.id AND t.user_id=$1 ' +
+      'WHERE b.user_id=$1 ' +
+      'GROUP BY b.id,b.name ORDER BY b.name',
+      [req.userId]
     );
     const tx = await pool.query(
       'SELECT t.date::text,t.type,t.amount,t.description,b.name as business ' +
       'FROM transactions t JOIN businesses b ON b.id=t.business_id ' +
-      'ORDER BY t.created_at DESC LIMIT 8'
+      'WHERE t.user_id=$1 ' +
+      'ORDER BY t.created_at DESC LIMIT 8',
+      [req.userId]
     );
 
     const bizSummary = biz.rows.map(function(b) {
