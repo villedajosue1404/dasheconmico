@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const fs      = require('fs');
 const { initDB }                    = require('./db/schema');
 const { setupBot, registerWebhook } = require('./bot_v2');
 const { startScheduler }            = require('./scheduler');
@@ -12,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 app.use('/api/auth', authRouter);
 
@@ -30,7 +31,10 @@ app.get('/api/health', function(req, res) {
 setupBot(app);
 
 app.get('*', function(req, res) {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  var html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+  // Inyectar Google Client ID desde variable de entorno
+  html = html.replace('{{GOOGLE_CLIENT_ID}}', process.env.GOOGLE_CLIENT_ID || '');
+  res.send(html);
 });
 
 initDB().then(function() {

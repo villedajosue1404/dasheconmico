@@ -101,6 +101,49 @@
     if (e.key === 'Enter') document.getElementById('authBtn').click();
   });
 
+  // ── GOOGLE SIGN-IN ──
+  window.handleGoogleCredential = function(response) {
+    var errEl = document.getElementById('authError');
+    errEl.style.display = 'none';
+    fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: response.credential })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        setAuth(data.token, data.user);
+        hideAuth();
+      } else {
+        errEl.textContent = data.error || 'Error con Google';
+        errEl.style.display = '';
+      }
+    })
+    .catch(function(e) {
+      errEl.textContent = 'Error: ' + e.message;
+      errEl.style.display = '';
+    });
+  };
+
+  function initGoogle() {
+    if (typeof google === 'undefined' || !google.accounts) {
+      setTimeout(initGoogle, 300);
+      return;
+    }
+    var clientId = document.getElementById('googleClientId').textContent.trim();
+    if (!clientId) return;
+    google.accounts.id.initialize({
+      client_id: clientId,
+      callback: window.handleGoogleCredential
+    });
+    google.accounts.id.renderButton(
+      document.getElementById('googleBtn'),
+      { theme: 'outline', size: 'large', type: 'standard', shape: 'rectangular', text: 'signin_with', logo_alignment: 'center', width: 300 }
+    );
+  }
+  initGoogle();
+
   // ── RELOJ ──
   function tick() {
     var n = new Date();

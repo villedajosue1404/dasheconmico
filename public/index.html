@@ -6,6 +6,7 @@
 <title>Centro de Mando — Núcleo Neural</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root{
   --bg:#06090f;
@@ -176,6 +177,12 @@ body::before{
   display:flex;align-items:center;justify-content:center;
 }
 .hidden{display:none!important}
+.auth-divider{
+  display:flex;align-items:center;gap:12px;margin:16px 0;font-size:11px;color:var(--text3);
+}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+#googleBtn{display:flex;justify-content:center;min-height:40px}
+#googleBtn>div>div{ border-radius:8px!important; }
 
 .center-panel{
   display:flex; flex-direction:column; align-items:center;
@@ -280,12 +287,15 @@ body::before{
 <!-- AUTH OVERLAY -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-box">
+    <div style="display:none" id="googleClientId">{{GOOGLE_CLIENT_ID}}</div>
     <div class="auth-logo">◆</div>
     <div class="auth-title" id="authTitle">Iniciar Sesión</div>
     <div class="auth-sub" id="authSub">Centro de Mando · Núcleo Neural</div>
     <input class="auth-input" id="authName" type="text" placeholder="Nombre completo" style="display:none" maxlength="80"/>
     <input class="auth-input" id="authEmail" type="email" placeholder="Correo electrónico" autocomplete="email"/>
     <input class="auth-input" id="authPass" type="password" placeholder="Contraseña" autocomplete="current-password"/>
+    <div id="googleBtn"></div>
+    <div class="auth-divider">o email</div>
     <div class="auth-error" id="authError"></div>
     <button class="auth-btn" id="authBtn">Entrar</button>
     <div class="auth-link" id="authToggleLink">¿No tenés cuenta? <span class="auth-switch">Registrate</span></div>

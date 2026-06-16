@@ -1,6 +1,7 @@
 const express   = require('express');
 const bcrypt    = require('bcryptjs');
 const jwt       = require('jsonwebtoken');
+const fetch     = require('node-fetch');
 const { pool }  = require('../db/schema');
 const router    = express.Router();
 
@@ -72,6 +73,45 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authMiddleware, async (req, res) => {
   res.json({ ok: true, user: { id: req.userId, name: req.userName, email: req.userEmail } });
+});
+
+// Google Sign-In (verifica el token con Google y crea/retorna usuario)
+router.post('/google', async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) return res.status(400).json({ ok: false, error: 'Token de Google requerido' });
+
+  try {
+    // Verificar el token contra Google
+    const verify = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + credential);
+    const data   = await verify.json();
+
+    if (!data.email) {
+      return res.status(401).json({ ok: false, error: 'Token de Google inválido' });
+    }
+
+    const email = data.email;
+    const name  = data.name || email.split('@')[0];
+    const pic   = data.picture || null;
+
+    // Buscar o crear usuario
+    const existing = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
+    let user;
+    if (existing.rows.length) {
+      user = existing.rows[0];
+    } else {
+      // Crear usuario sin contraseña (login solo con Google)
+      const r = await pool.query(
+        'INSERT INTO users(name,email,password) VALUES($1,$2,$3) RETURNING *',
+        [name, email, '(google-oauth)']
+      );
+      user = r.rows[0];
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '30d' });
+    res.json({ ok: true, token, user: { id: user.id, name: user.name, email: user.email, picture: pic } });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'Error verificando token de Google: ' + e.message });
+  }
 });
 
 module.exports = { router, authMiddleware };
