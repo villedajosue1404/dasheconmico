@@ -23,6 +23,7 @@ app.use('/api/businesses',   authMiddleware, require('./routes/businesses'));
 app.use('/api/transactions', authMiddleware, require('./routes/transactions'));
 app.use('/api/posts',        authMiddleware, require('./routes/posts'));
 app.use('/api/chat',         authMiddleware, require('./routes/chat'));
+app.use('/api/memory',       authMiddleware, require('./routes/memory'));
 
 app.get('/api/health', function(req, res) {
   res.json({ ok: true, time: new Date().toISOString() });

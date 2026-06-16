@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const fetch   = require('node-fetch');
 const { pool } = require('../db/schema');
+const { searchMemory, extractKeywords } = require('./memory');
 
 const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -14,6 +15,20 @@ router.post('/', async (req, res) => {
   if (!key) return res.json({ ok: true, reply: 'No tengo IA configurada (falta GROQ_API_KEY).' });
 
   try {
+    // Buscar en memoria primero
+    var memResults = await searchMemory(req.userId, message, 'user', 3);
+    var memContext = '';
+    if (memResults.length) {
+      memContext = '\n\nConocimiento previo relevante:\n' +
+        memResults.map(function(m) {
+          return '- [' + m.type + '] ' + m.question + ' → ' + m.answer.slice(0, 200);
+        }).join('\n') +
+        '\n\nUsa este conocimiento si es pertinente.';
+      // Incrementar hit count
+      await pool.query("UPDATE memory SET hit_count=hit_count+1 WHERE id=ANY($1)",
+        [memResults.map(function(m) { return m.id; })]);
+    }
+
     // Contexto financiero del usuario autenticado
     const biz = await pool.query(
       'SELECT b.name,' +
@@ -51,7 +66,8 @@ router.post('/', async (req, res) => {
       'NEGOCIOS:\n' + bizSummary + '\n\n' +
       'ULTIMAS TRANSACCIONES:\n' + txSummary + '\n\n' +
       'Responde preguntas sobre estos datos, da analisis, proyecciones y consejos. ' +
-      'Se conciso (maximo 100 palabras) ya que tus respuestas pueden leerse en voz alta.';
+      'Se conciso (maximo 100 palabras) ya que tus respuestas pueden leerse en voz alta.' +
+      memContext;
 
     const msgs = [{ role: 'system', content: system }]
       .concat((history || []).slice(-6))
@@ -64,6 +80,15 @@ router.post('/', async (req, res) => {
     });
     const data  = await groqRes.json();
     const reply = data.choices && data.choices[0] ? data.choices[0].message.content : 'No pude responder.';
+
+    // Guardar en memoria (ignorar errores)
+    try {
+      var keywords = extractKeywords(message);
+      await pool.query(
+        "INSERT INTO memory(user_id,scope,type,keywords,question,answer) VALUES($1,'user','qa',$2,$3,$4) ON CONFLICT DO NOTHING",
+        [req.userId, keywords, message.slice(0, 300), reply.slice(0, 500)]
+      );
+    } catch (_) {}
 
     res.json({ ok: true, reply: reply });
   } catch (e) {

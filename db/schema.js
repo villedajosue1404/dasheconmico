@@ -75,6 +75,22 @@ async function initDB() {
         last_sent TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS memory (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        scope TEXT NOT NULL DEFAULT 'user' CHECK(scope IN ('user','global')),
+        type TEXT NOT NULL DEFAULT 'qa' CHECK(type IN ('qa','pattern','correction','improvement')),
+        keywords TEXT[] DEFAULT '{}',
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        feedback TEXT,
+        hit_count INTEGER DEFAULT 1,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_memory_user ON memory(user_id);
+      CREATE INDEX IF NOT EXISTS idx_memory_scope ON memory(scope);
     `);
 
     // Migraciones para tablas existentes sin user_id
