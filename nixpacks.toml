@@ -1,7 +1,6 @@
 [phases.setup]
-nixPkgs = [
-  "nodejs_20"
-]
+nixPkgs = ["nodejs_20"]
+aptPkgs = ["texlive-latex-base", "texlive-latex-extra"]
 
 [phases.install]
 cmds = ["npm install"]

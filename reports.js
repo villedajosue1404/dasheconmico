@@ -2,6 +2,10 @@
 // REPORTS.JS — PDF con PDFKit + Excel con ExcelJS
 // ============================================================
 
+const { execSync }  = require('child_process');
+const fs            = require('fs');
+const os            = require('os');
+const path          = require('path');
 const ExcelJS       = require('exceljs');
 const { pool }      = require('./db/schema');
 
@@ -183,7 +187,141 @@ async function generateAIContent(data, userRequest) {
   try { return JSON.parse(raw.replace(/```json|```/g, '').trim()); } catch(_) { return null; }
 }
 
-// ── Generar PDF con PDFKit - diseño profesional como LaTeX ──
+// ── Escapa caracteres especiales de LaTeX ──
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/\\/g, '\\textbackslash{}')
+    .replace(/&/g, '\\&')
+    .replace(/%/g, '\\%')
+    .replace(/\$/g, '\\$')
+    .replace(/#/g, '\\#')
+    .replace(/_/g, '\\_')
+    .replace(/{/g, '\\{')
+    .replace(/}/g, '\\}')
+    .replace(/~/g, '\\textasciitilde{}')
+    .replace(/\^/g, '\\textasciicircum{}')
+    .replace(/'/g, "\\textquotesingle{}")
+    .replace(/"/g, "\\textquotedbl{}");
+}
+
+function fmtQ(n) {
+  return 'Q\\,' + parseFloat(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '{,}');
+}
+
+// ── Generar LaTeX del informe ──
+function buildLatex(data, content) {
+  var reportTitle = esc(content && content.title ? content.title : 'Reporte Financiero y Operativo');
+  var reportSub = esc(content && content.subtitle ? content.subtitle : 'Análisis de Ingresos, Costos y Márgenes de Ganancia');
+  var execSummary = esc(content && content.executiveSummary || 'No hay datos suficientes para generar un resumen ejecutivo.');
+  var revenueAnalysis = esc(content && content.revenueAnalysis || '');
+  var costStructure = esc(content && content.costStructure || '');
+  var marginsText = esc(content && content.marginsAndProjections || '');
+  var conclusions = esc(content && content.conclusions || '');
+  var period = esc(data.period);
+  var dateFrom = esc(data.dateFrom);
+  var dateTo = esc(data.dateTo);
+  var today = new Date().toLocaleDateString('es-GT');
+  var grossMargin = data.totalIncome > 0
+    ? ((data.totalIncome - data.totalExpense) / data.totalIncome * 100).toFixed(1)
+    : '0.0';
+
+  var bizRows = data.businesses.map(function(b) {
+    var bal = parseFloat(b.balance);
+    return '        ' + esc(b.name) + ' & ' + fmtQ(b.income) + ' & ' + fmtQ(b.expense) + ' & ' +
+      (bal >= 0 ? '' : '$\\color{red}$') + fmtQ(bal) + ' & ' + b.tx_count + ' \\\\';
+  }).join('\n');
+
+  return '\\documentclass[12pt, a4paper]{article}\n' +
+    '\\usepackage[utf8]{inputenc}\n' +
+    '\\usepackage[spanish]{babel}\n' +
+    '\\usepackage{geometry}\n' +
+    '\\usepackage{graphicx}\n' +
+    '\\usepackage{booktabs}\n' +
+    '\\usepackage{xcolor}\n' +
+    '\\usepackage{fancyhdr}\n' +
+    '\\usepackage{titlesec}\n' +
+    '\\usepackage{tabularx}\n' +
+    '\\usepackage{amsmath}\n' +
+    '\\usepackage{longtable}\n' +
+    '\\usepackage{enumitem}\n' +
+    '\\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}\n' +
+    '\\definecolor{primary}{RGB}{0, 51, 102}\n' +
+    '\\definecolor{secondary}{RGB}{102, 102, 102}\n' +
+    '\\pagestyle{fancy}\n' +
+    '\\fancyhf{}\n' +
+    '\\fancyhead[L]{\\textcolor{secondary}{\\small Reporte Financiero Mensual}}\n' +
+    '\\fancyhead[R]{\\textcolor{secondary}{\\small ' + today + '}}\n' +
+    '\\fancyfoot[C]{\\thepage}\n' +
+    '\\titleformat{\\section}\n' +
+    '  {\\normalfont\\Large\\bfseries\\color{primary}}{\\thesection}{1em}{}\n' +
+    '\\titleformat{\\subsection}\n' +
+    '  {\\normalfont\\large\\bfseries\\color{secondary}}{\\thesubsection}{1em}{}\n' +
+    '\\begin{document}\n' +
+    '\\begin{center}\n' +
+    '    \\vspace*{2cm}\n' +
+    '    {\\Huge \\textbf{\\textcolor{primary}{' + reportTitle + '}}}\\\\[0.5cm]\n' +
+    '    {\\Large ' + reportSub + '}\\\\[1.5cm]\n' +
+    '    {\\large \\textbf{Per\\u00edodo:} ' + period + '}\\\\[0.5cm]\n' +
+    '    {\\large \\textbf{Preparado por:} Centro de Mando}\\\\[2cm]\n' +
+    '\\end{center}\n' +
+    '\\newpage\n' +
+    '\\section{Resumen Ejecutivo}\n' +
+    execSummary + '\n\n' +
+    '\\vspace{0.5cm}\n' +
+    '\\begin{center}\n' +
+    '\\begin{tabular}{ccc}\n' +
+    '    \\textbf{\\textcolor{primary}{Total Ingresos}} & \\textbf{\\textcolor{secondary}{Total Gastos}} & \\textbf{\\textcolor{primary}{Balance Neto}} \\\\[4pt]\n' +
+    '    \\LARGE\\textcolor{primary}{' + fmtQ(data.totalIncome) + '} & \\LARGE\\textcolor{secondary}{' + fmtQ(data.totalExpense) + '} & \\LARGE\\textcolor{' + (data.totalBalance >= 0 ? 'primary' : 'red') + '}{' + fmtQ(data.totalBalance) + '} \\\\\n' +
+    '\\end{tabular}\n' +
+    '\\end{center}\n' +
+    '\\vspace{0.5cm}\n' +
+    '\\section{An\\\'{a}lisis de Ingresos}\n' +
+    (revenueAnalysis ? revenueAnalysis + '\n\n' : '') +
+    '\\begin{table}[h]\n' +
+    '    \\centering\n' +
+    '    \\renewcommand{\\arraystretch}{1.3}\n' +
+    '    \\begin{tabular}{lrrrr}\n' +
+    '        \\toprule\n' +
+    '        \\textbf{Negocio} & \\textbf{Ingresos} & \\textbf{Gastos} & \\textbf{Balance} & \\textbf{Movs} \\\\\n' +
+    '        \\midrule\n' +
+    bizRows + '\n' +
+    '        \\midrule\n' +
+    '        \\textbf{TOTAL} & \\textbf{' + fmtQ(data.totalIncome) + '} & \\textbf{' + fmtQ(data.totalExpense) + '} & \\textbf{' + fmtQ(data.totalBalance) + '} & \\textbf{' + data.transactions.length + '} \\\\\n' +
+    '        \\bottomrule\n' +
+    '    \\end{tabular}\n' +
+    '    \\caption{Desglose de ingresos por negocio.}\n' +
+    '\\end{table}\n' +
+    '\\section{Estructura de Costos}\n' +
+    (costStructure ? costStructure + '\n\n' : '') +
+    '\\section{M\\\'{a}rgenes de Ganancia y Rentabilidad}\n' +
+    'El margen de ganancia bruta del per\\u00edodo es del \\textbf{' + grossMargin + '\\%}. ' +
+    (marginsText ? marginsText : '') + '\n\n' +
+    'La f\\\'{o}rmula utilizada para el c\\\'{a}lculo de la Utilidad Neta es:\n' +
+    '\\begin{equation}\n' +
+    '    \\text{Utilidad Neta} = \\text{Ingresos Totales} - (\\text{COGS} + \\text{OPEX} + \\text{Impuestos})\n' +
+    '\\end{equation}\n' +
+    '\\section{Conclusiones y Pr\\\'{o}ximos Pasos}\n' +
+    (conclusions ? conclusions : '') + '\n' +
+    '\\end{document}';
+}
+
+// ── Compilar LaTeX → PDF buffer ──
+async function compileLatex(texSource) {
+  var tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmd-report-'));
+  var texFile = path.join(tmpDir, 'report.tex');
+  var pdfFile = path.join(tmpDir, 'report.pdf');
+  try {
+    fs.writeFileSync(texFile, texSource, 'utf8');
+    var cmd = 'pdflatex -interaction=nonstopmode -output-directory="' + tmpDir + '" "' + texFile + '"';
+    execSync(cmd, { timeout: 30000, stdio: 'pipe' });
+    execSync(cmd, { timeout: 30000, stdio: 'pipe' });
+    if (!fs.existsSync(pdfFile)) throw new Error('PDF no generado');
+    return fs.readFileSync(pdfFile);
+  } finally {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch(_) {}
+  }
+}
 function buildPDF(data, content) {
   var PDFDocument = require('pdfkit');
   var doc = new PDFDocument({ size: 'A4', margin: 60 });
@@ -351,14 +489,20 @@ function buildPDF(data, content) {
   });
 }
 
-// ── generatePDF: entrada pública ──
+// ── generatePDF: intenta LaTeX, fallback PDFKit ──
 async function generatePDF(filter, aiAnalysis, userId, userRequest) {
   const data = await getReportData(filter, userId);
   var content = null;
   if (userRequest) {
     try { content = await generateAIContent(data, userRequest); } catch(_) {}
   }
-  return await buildPDF(data, content);
+  var tex = buildLatex(data, content);
+  try {
+    return await compileLatex(tex);
+  } catch(e) {
+    console.error('LaTeX error:', e.message);
+    return await buildPDF(data, content);
+  }
 }
 
 // ── generateExcel: corregido con filtro por negocio ──
