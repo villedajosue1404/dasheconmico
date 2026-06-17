@@ -337,19 +337,28 @@ async function compileTex(texSource) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmd-report-'));
   const texFile = path.join(tmpDir, 'report.tex');
   const pdfFile = path.join(tmpDir, 'report.pdf');
+  const logFile = path.join(tmpDir, 'report.log');
 
   try {
     fs.writeFileSync(texFile, texSource, 'utf8');
-    // Dos pasadas para referencias cruzadas
     const cmd = `xelatex -interaction=nonstopmode -output-directory="${tmpDir}" "${texFile}"`;
     execSync(cmd, { timeout: 90000, stdio: 'pipe' });
     execSync(cmd, { timeout: 90000, stdio: 'pipe' });
 
-    if (!fs.existsSync(pdfFile)) throw new Error('PDF no generado por lualatex');
+    if (!fs.existsSync(pdfFile)) {
+      var log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').slice(-1000) : 'sin log';
+      throw new Error('PDF no generado. LaTeX log:\n' + log);
+    }
     const buf = fs.readFileSync(pdfFile);
     return buf;
+  } catch(e) {
+    // Incluir log en el error
+    if (!e.message.includes('LaTeX log')) {
+      var log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').slice(-1000) : '';
+      if (log) e.message += '\nLog: ' + log;
+    }
+    throw e;
   } finally {
-    // Limpiar archivos temporales
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch(e) {}
   }
 }

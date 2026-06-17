@@ -1,7 +1,7 @@
 [phases.setup]
 nixPkgs = [
   "nodejs_20",
-  "texlive.combined.scheme-small",
+  "texlive.combined.scheme-medium",
   "dejavu_fonts"
 ]
 
