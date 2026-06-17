@@ -342,6 +342,13 @@ ${txSection}
 
 // ── Compilar LaTeX → PDF buffer ──
 async function compileTex(texSource) {
+  // Verificar que pdflatex existe
+  try {
+    execSync('pdflatex --version', { timeout: 5000, stdio: 'pipe' });
+  } catch(e) {
+    throw new Error('pdflatex no instalado');
+  }
+
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmd-report-'));
   const texFile = path.join(tmpDir, 'report.tex');
   const pdfFile = path.join(tmpDir, 'report.pdf');
@@ -350,24 +357,24 @@ async function compileTex(texSource) {
   try {
     fs.writeFileSync(texFile, texSource, 'utf8');
     const cmd = `pdflatex -interaction=nonstopmode -output-directory="${tmpDir}" "${texFile}"`;
-    execSync(cmd, { timeout: 60000, stdio: 'pipe' });
-    execSync(cmd, { timeout: 60000, stdio: 'pipe' });
+    execSync(cmd, { timeout: 30000, stdio: 'pipe' });
+    execSync(cmd, { timeout: 30000, stdio: 'pipe' });
 
     if (!fs.existsSync(pdfFile)) {
       var log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').slice(-1000) : 'sin log';
-      throw new Error('PDF no generado. LaTeX log:\n' + log);
+      throw new Error('PDF no generado. Log:\n' + log);
     }
-    const buf = fs.readFileSync(pdfFile);
-    return buf;
+    return fs.readFileSync(pdfFile);
   } catch(e) {
-    // Incluir log en el error
-    if (!e.message.includes('LaTeX log')) {
-      var log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').slice(-1000) : '';
-      if (log) e.message += '\nLog: ' + log;
+    if (e.message.includes('pdflatex no instalado')) throw e;
+    if (!e.message.includes('PDF no generado')) {
+      var log = '';
+      try { log = fs.readFileSync(logFile, 'utf8').slice(-500); } catch(_) {}
+      e.message += log ? '\nLog: ' + log : '';
     }
     throw e;
   } finally {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch(e) {}
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch(_) {}
   }
 }
 
@@ -376,10 +383,25 @@ async function generatePDF(filter, aiAnalysis, userId, userRequest) {
   const data = await getReportData(filter, userId);
   var style = null;
   if (userRequest) {
-    try { style = await generateAIStyle(data, userRequest); } catch(e) {}
+    try { style = await generateAIStyle(data, userRequest); } catch(_) {}
   }
   var tex = buildTex(data, aiAnalysis, style);
-  return await compileTex(tex);
+  try {
+    return await compileTex(tex);
+  } catch(e) {
+    console.error('PDF LaTeX error:', e.message);
+    // Fallback: texto plano
+    var txt = 'INFORME ' + data.period.toUpperCase() + '\n';
+    txt += 'Del ' + data.dateFrom + ' al ' + data.dateTo + '\n\n';
+    txt += 'Ingresos: Q' + parseFloat(data.totalIncome).toFixed(2) + '\n';
+    txt += 'Gastos:   Q' + parseFloat(data.totalExpense).toFixed(2) + '\n';
+    txt += 'Balance:  Q' + parseFloat(data.totalBalance).toFixed(2) + '\n\n';
+    txt += 'NEGOCIOS:\n';
+    data.businesses.forEach(function(b) {
+      txt += '  ' + b.name + ': Q' + parseFloat(b.balance).toFixed(2) + '\n';
+    });
+    return Buffer.from(txt, 'utf8');
+  }
 }
 
 // ── generateExcel: corregido con filtro por negocio ──

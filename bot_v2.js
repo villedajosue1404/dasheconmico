@@ -315,15 +315,19 @@ async function execute(chatId, intent, userName, msg) {
 
   // INFORME PDF
   if (a === 'report') {
-    await tgSend(chatId, '⏳ Generando informe PDF con IA...');
+    await tgSend(chatId, '⏳ Generando informe PDF...');
     try {
       const { generateReport } = require('./ai');
       const aiText = await generateReport(intent.period || 'resumen general', chatId);
       const buf = await generatePDF(intent.period, aiText, uid, msg);
-      await tgSendDoc(chatId, buf, 'informe.pdf', '📊 Informe ' + (intent.period||'general'));
+      if (buf.length < 200) {
+        await tgSend(chatId, '📄 ' + buf.toString('utf8'));
+      } else {
+        await tgSendDoc(chatId, buf, 'informe.pdf', '📊 Informe ' + (intent.period||'general'));
+      }
     } catch(e) {
       console.error('PDF error:', e.message);
-      await tgSend(chatId, '❌ Error generando PDF: ' + e.message);
+      await tgSend(chatId, '❌ ' + e.message.slice(0, 200));
     }
     return;
   }
