@@ -198,7 +198,8 @@ function buildPDF(data, content) {
   function Q(n) { return 'Q' + parseFloat(n || 0).toFixed(2); }
 
   function sectionTitle(text) {
-    doc.y += 10;
+    if (doc.y > 680) { addPageFooter(); doc.addPage(); }
+    doc.y += 6;
     doc.fontSize(16).font('Helvetica-Bold').fillColor(primary).text(text, 60, doc.y);
     doc.moveTo(60, doc.y + 4).lineTo(doc.page.width - 60, doc.y + 4).lineWidth(1).stroke(primary);
     doc.y += 16;
@@ -207,11 +208,7 @@ function buildPDF(data, content) {
   function bodyText(text) {
     if (!text) return;
     doc.fontSize(10).font('Helvetica').fillColor(black);
-    var lines = text.split('\n');
-    lines.forEach(function(line) {
-      doc.text(line.trim(), 60, doc.y, { width: doc.page.width - 120, align: 'justify', lineGap: 4 });
-      doc.y += 6;
-    });
+    doc.text(text, 60, doc.y, { width: doc.page.width - 120, align: 'justify', lineGap: 4 });
     doc.y += 6;
   }
 
@@ -221,63 +218,52 @@ function buildPDF(data, content) {
     doc.fillColor(color).fontSize(16).font('Helvetica-Bold').text(value, x + 10, y + 22, { width: 120, align: 'center' });
   }
 
-  function drawTable(headers, rows, colWidths) {
+  function drawTable(rows) {
     var tableX = 60;
+    var colW = [80, 100, 80, 80, 60];
     var tableW = doc.page.width - 120;
     var rowH = 20;
-    var headerH = 22;
-    var currentY = doc.y;
 
-    if (currentY + (rows.length + 1) * rowH > doc.page.height - 80) {
-      addPageFooter();
-      doc.addPage();
-      currentY = 60;
+    if (doc.y + 40 + (rows.length + 2) * rowH > doc.page.height - 60) {
+      addPageFooter(); doc.addPage();
     }
 
     // Header
-    doc.rect(tableX, currentY, tableW, headerH).fill(primary);
+    doc.rect(tableX, doc.y, tableW, 22).fill(primary);
     doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold');
-    var xOffset = tableX;
-    headers.forEach(function(h, i) {
-      doc.text(h, xOffset + 6, currentY + 5, { width: colWidths[i] - 12, align: i === 0 ? 'left' : 'right' });
-      xOffset += colWidths[i];
+    var xOff = tableX;
+    ['Negocio', 'Ingresos', 'Gastos', 'Balance', 'Movs'].forEach(function(h, i) {
+      doc.text(h, xOff + 6, doc.y + 5, { width: colW[i] - 12, align: i === 0 ? 'left' : 'right' });
+      xOff += colW[i];
     });
+    doc.y += 22;
 
-    // Rows
-    var rowY = currentY + headerH;
     rows.forEach(function(row, i) {
-      if (rowY + rowH > doc.page.height - 60) {
-        doc.addPage();
-        rowY = 60;
-      }
-      if (i % 2 === 0) doc.rect(tableX, rowY, tableW, rowH).fill(lightGray);
-      var xOff = tableX;
+      if (doc.y + rowH > doc.page.height - 60) { addPageFooter(); doc.addPage(); }
+      if (i % 2 === 0) doc.rect(tableX, doc.y, tableW, rowH).fill(lightGray);
+      xOff = tableX;
       doc.fontSize(9).font('Helvetica');
       row.forEach(function(cell, j) {
-        var isLastCol = j === row.length - 1;
-        var isBalanceCol = j === 3;
-        doc.fillColor(isLastCol && isBalanceCol ? (parseFloat(cell) >= 0 ? primary : '#C0392B') : black);
-        doc.font(isLastCol && isBalanceCol ? 'Helvetica-Bold' : 'Helvetica');
-        var text = typeof cell === 'number' ? Q(cell) : String(cell);
-        doc.text(text, xOff + 6, rowY + 4, { width: colWidths[j] - 12, align: j === 0 ? 'left' : 'right' });
-        xOff += colWidths[j];
+        var isBal = j === 3;
+        doc.fillColor(isBal ? (parseFloat(cell) >= 0 ? primary : '#C0392B') : black);
+        doc.font(isBal ? 'Helvetica-Bold' : 'Helvetica');
+        doc.text(isBal ? Q(cell) : String(cell), xOff + 6, doc.y + 4, { width: colW[j] - 12, align: j === 0 ? 'left' : 'right' });
+        xOff += colW[j];
       });
-      rowY += rowH;
+      doc.y += rowH;
     });
 
     // Total row
-    if (rowY + rowH > doc.page.height - 60) { doc.addPage(); rowY = 60; }
-    doc.rect(tableX, rowY, tableW, rowH).fill(lightGray);
-    xOffset = tableX;
+    if (doc.y + rowH > doc.page.height - 60) { addPageFooter(); doc.addPage(); }
+    doc.rect(tableX, doc.y, tableW, rowH).fill(lightGray);
+    xOff = tableX;
     doc.fontSize(9).font('Helvetica-Bold');
-    var totalCells = ['TOTAL', Q(data.totalIncome), Q(data.totalExpense), Q(data.totalBalance)];
-    totalCells.forEach(function(cell, j) {
-      doc.fillColor(j === 3 ? (data.totalBalance >= 0 ? primary : '#C0392B') : primary);
-      doc.text(String(cell), xOffset + 6, rowY + 4, { width: colWidths[j] - 12, align: j === 0 ? 'left' : 'right' });
-      xOffset += colWidths[j];
+    [['TOTAL', primary], [Q(data.totalIncome), primary], [Q(data.totalExpense), primary], [Q(data.totalBalance), data.totalBalance >= 0 ? primary : '#C0392B']].forEach(function(pair, j) {
+      doc.fillColor(pair[1]);
+      doc.text(pair[0], xOff + 6, doc.y + 4, { width: colW[j] - 12, align: j === 0 ? 'left' : 'right' });
+      xOff += colW[j];
     });
-
-    doc.y = rowY + rowH + 15;
+    doc.y += rowH + 10;
   }
 
   function addPageFooter() {
@@ -331,37 +317,28 @@ function buildPDF(data, content) {
   sectionTitle('Análisis de Ingresos');
   bodyText(content && content.revenueAnalysis);
 
-  var colWidths = [80, 100, 80, 80, 60];
-  var headers = ['Negocio', 'Ingresos', 'Gastos', 'Balance', 'Movs'];
-  var rows = data.businesses.map(function(b) {
+  drawTable(data.businesses.map(function(b) {
     return [b.name, parseFloat(b.income), parseFloat(b.expense), parseFloat(b.balance), parseInt(b.tx_count)];
-  });
-  drawTable(headers, rows, colWidths);
+  }));
 
-  // ── ESTRUCTURA DE COSTOS ──
-  if (doc.y > 600) { addPageFooter(); doc.addPage(); }
+  // ── ESTRUCTURA DE COSTOS ──  
   sectionTitle('Estructura de Costos');
   bodyText(content && content.costStructure);
 
   // ── MÁRGENES Y PROYECCIONES ──
-  if (doc.y > 600) { addPageFooter(); doc.addPage(); }
   sectionTitle('Márgenes de Ganancia y Rentabilidad');
-
   var grossMargin = data.totalIncome > 0
     ? ((data.totalIncome - data.totalExpense) / data.totalIncome * 100).toFixed(1)
     : '0.0';
-  var marginColor = parseFloat(grossMargin) >= 30 ? primary : '#C0392B';
-
   doc.fontSize(10).font('Helvetica').fillColor(black);
-  doc.text('El margen de ganancia bruta del período es del ', 60, doc.y, { continued: true });
-  doc.font('Helvetica-Bold').fillColor(marginColor).text(grossMargin + '%', { continued: true });
+  doc.text('Margen de ganancia bruta del período: ', 60, doc.y, { continued: true });
+  doc.font('Helvetica-Bold').fillColor(parseFloat(grossMargin) >= 30 ? primary : '#C0392B')
+     .text(grossMargin + '%', { continued: true });
   doc.font('Helvetica').fillColor(black).text('.');
-
   doc.y += 16;
   bodyText(content && content.marginsAndProjections);
 
   // ── CONCLUSIONES ──
-  if (doc.y > 600) { addPageFooter(); doc.addPage(); }
   sectionTitle('Conclusiones y Próximos Pasos');
   bodyText(content && content.conclusions);
 
