@@ -243,22 +243,24 @@ ${txRows}
 ` : '';
 
   return `\\documentclass[11pt,a4paper]{article}
-\\usepackage{fontspec}
+\\usepackage[utf8]{inputenc}
+\\usepackage[T1]{fontenc}
+\\usepackage[spanish]{babel}
 \\usepackage{xcolor}
 \\usepackage{geometry}
 \\usepackage{booktabs}
 \\usepackage{longtable}
 \\usepackage{colortbl}
 \\usepackage{tabularx}
-\\usepackage{tcolorbox}
+\\usepackage[breakable,skins]{tcolorbox}
 \\usepackage{titlesec}
 \\usepackage{parskip}
 \\usepackage{fancyhdr}
 \\usepackage{graphicx}
 \\usepackage{array}
+\\usepackage{anyfontsize}
 
 \\geometry{top=2cm,bottom=2.5cm,left=2.5cm,right=2.5cm}
-\\setmainfont{DejaVu Sans}
 
 % Colores
 \\definecolor{accent}{HTML}{${cAccent}}
@@ -279,8 +281,6 @@ ${txRows}
 
 % Títulos de sección
 \\titleformat{\\section*}{\\Large\\bfseries\\color{darkbg}}{}{0em}{}[\\color{accent}\\titlerule]
-
-\\tcbuselibrary{skins,breakable}
 
 \\begin{document}
 
@@ -349,9 +349,9 @@ async function compileTex(texSource) {
 
   try {
     fs.writeFileSync(texFile, texSource, 'utf8');
-    const cmd = `xelatex -interaction=nonstopmode -output-directory="${tmpDir}" "${texFile}"`;
-    execSync(cmd, { timeout: 90000, stdio: 'pipe' });
-    execSync(cmd, { timeout: 90000, stdio: 'pipe' });
+    const cmd = `pdflatex -interaction=nonstopmode -output-directory="${tmpDir}" "${texFile}"`;
+    execSync(cmd, { timeout: 60000, stdio: 'pipe' });
+    execSync(cmd, { timeout: 60000, stdio: 'pipe' });
 
     if (!fs.existsSync(pdfFile)) {
       var log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').slice(-1000) : 'sin log';
