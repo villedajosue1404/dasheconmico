@@ -143,6 +143,60 @@ async function getReportData(filter, userId) {
   };
 }
 
+// ── Generar .tex con IA (Groq) ──
+async function generateAITex(data, userRequest, userId) {
+  var key = process.env.GROQ_API_KEY;
+  if (!key) return null;
+
+  var dataSummary = JSON.stringify({
+    period: data.period,
+    dateFrom: data.dateFrom,
+    dateTo: data.dateTo,
+    totalIncome: data.totalIncome,
+    totalExpense: data.totalExpense,
+    totalBalance: data.totalBalance,
+    businesses: data.businesses.map(function(b) {
+      return { name: b.name, income: b.income, expense: b.expense, balance: b.balance, tx_count: b.tx_count };
+    }),
+    transactions: data.transactions.slice(0, 30).map(function(t) {
+      return { date: t.date, business: t.business, type: t.type, amount: t.amount, description: t.description, category: t.category };
+    })
+  }, null, 2);
+
+  var systemPrompt =
+    'Eres un diseñador de informes financieros experto en LaTeX. ' +
+    'Genera código LaTeX profesional, elegante y con estilo moderno. ' +
+    'Usa el paquete fontspec con DejaVu Sans, xcolor, booktabs, longtable, colortbl, tcolorbox, titlesec, fancyhdr, graphicx. ' +
+    'Colores: accent=6C5CE7, darkbg=1A1A2E, green=00875A, red=C0392B. ' +
+    'Devuelve ÚNICAMENTE el código LaTeX completo, SIN markdown, SIN explicaciones, SIN bloques ```. ' +
+    'El documento debe tener: portada elegante, resumen ejecutivo con 3 métricas clave, tabla de negocios, ' +
+    'y tabla de transacciones. Usa \\newpage si es necesario.\n\n' +
+    'La solicitud del usuario fue: "' + userRequest + '"\n\n' +
+    'Aplica el estilo que el usuario pide (ejecutivo, minimalista, colorido, con gráficos, etc.).';
+
+  var fetch = require('node-fetch');
+  var groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: 'Aquí están los datos financieros:\n' + dataSummary + '\n\nGenera el LaTeX.' }
+      ],
+      max_tokens: 3000,
+      temperature: 0.4
+    })
+  });
+  var groqData = await groqRes.json();
+  var latex = groqData.choices && groqData.choices[0] ? groqData.choices[0].message.content : null;
+  if (!latex) return null;
+
+  // Limpiar posibles wrappers markdown
+  latex = latex.replace(/^```(?:latex)?\n?/i, '').replace(/```$/i, '').trim();
+  return latex;
+}
+
 // ── Generar el .tex del informe ──
 function buildTex(data, aiAnalysis) {
   const genDate = new Date().toLocaleDateString('es-GT');
@@ -301,9 +355,19 @@ async function compileTex(texSource) {
 }
 
 // ── generatePDF: entrada pública ──
-async function generatePDF(filter, aiAnalysis, userId) {
+async function generatePDF(filter, aiAnalysis, userId, userRequest) {
   const data = await getReportData(filter, userId);
-  const tex  = buildTex(data, aiAnalysis);
+  var tex;
+  // Intentar con IA si hay solicitud de estilo específico o IA quiere controlar
+  if (userRequest) {
+    try {
+      tex = await generateAITex(data, userRequest, userId);
+    } catch(e) {
+      console.error('AI LaTeX falló:', e.message);
+    }
+  }
+  // Fallback al template estático
+  if (!tex) tex = buildTex(data, aiAnalysis);
   return await compileTex(tex);
 }
 

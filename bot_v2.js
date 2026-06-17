@@ -117,7 +117,7 @@ async function think(chatId, userMessage, ctx) {
     '{"action":"delete_tx","id":numero}\n' +
     '{"action":"edit_tx","id":numero,"field":"amount|description","value":"nuevo"}\n' +
     '{"action":"last_tx"}\n' +
-    '{"action":"report","period":"texto del periodo o nombre de negocio"}\n' +
+    '{"action":"report","period":"texto del periodo o nombre de negocio, incluye el estilo si el usuario lo pide (ej: ejecutivo, minimalista, colorido)"}\n' +
     '{"action":"excel","period":"texto del periodo o nombre de negocio"}\n' +
     '{"action":"publish_now","content":"texto a publicar"}\n' +
     '{"action":"schedule_post","content":"texto","days":"mon,tue,...","times":"09:00,18:00"}\n' +
@@ -315,11 +315,11 @@ async function execute(chatId, intent, userName, msg) {
 
   // INFORME PDF
   if (a === 'report') {
-    await tgSend(chatId, '⏳ Generando informe PDF...');
+    await tgSend(chatId, '⏳ Generando informe PDF con IA...');
     try {
       const { generateReport } = require('./ai');
       const aiText = await generateReport(intent.period || 'resumen general', chatId);
-      const buf = await generatePDF(intent.period, aiText, uid);
+      const buf = await generatePDF(intent.period, aiText, uid, msg);
       await tgSendDoc(chatId, buf, 'informe.pdf', '📊 Informe ' + (intent.period||'general'));
     } catch(e) {
       console.error('PDF error:', e.message);
