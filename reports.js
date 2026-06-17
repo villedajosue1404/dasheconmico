@@ -178,14 +178,15 @@ async function generateAITex(data, userRequest, userId) {
   var groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+    signal: AbortSignal.timeout(25000),
     body: JSON.stringify({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: 'Aquí están los datos financieros:\n' + dataSummary + '\n\nGenera el LaTeX.' }
       ],
-      max_tokens: 3000,
-      temperature: 0.4
+      max_tokens: 1200,
+      temperature: 0.3
     })
   });
   var groqData = await groqRes.json();
