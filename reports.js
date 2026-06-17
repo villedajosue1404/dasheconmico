@@ -358,12 +358,31 @@ async function compileTex(texSource) {
 async function generatePDF(filter, aiAnalysis, userId, userRequest) {
   const data = await getReportData(filter, userId);
   var tex;
-  // Intentar con IA si hay solicitud de estilo específico o IA quiere controlar
+  // Intentar con IA si hay solicitud de estilo específico
   if (userRequest) {
     try {
       tex = await generateAITex(data, userRequest, userId);
+      if (tex) {
+        // Probar compilar, si falla caer al template estático
+        try {
+          return await compileTex(tex);
+        } catch(e) {
+          var logFile = '/tmp/cmd-report-*/report.log';
+          var log = '';
+          try {
+            var fs2 = require('fs');
+            var files = fs2.readdirSync('/tmp').filter(function(f) { return f.startsWith('cmd-report-'); }).sort();
+            if (files.length) {
+              log = fs2.readFileSync('/tmp/' + files[files.length-1] + '/report.log', 'utf8').slice(-500);
+            }
+          } catch(_) {}
+          console.error('AI LaTeX compilación falló, usando template estático. Log:', log);
+          tex = null;
+        }
+      }
     } catch(e) {
-      console.error('AI LaTeX falló:', e.message);
+      console.error('AI LaTeX generación falló:', e.message);
+      tex = null;
     }
   }
   // Fallback al template estático
