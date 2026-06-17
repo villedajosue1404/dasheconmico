@@ -149,22 +149,21 @@ async function generateAIContent(data, userRequest) {
     'DETALLE POR NEGOCIO:\n' + bizTable;
 
   var systemPrompt =
-    'Eres un asesor financiero experto. Generas contenido para un informe financiero profesional. ' +
-    'Basado en los datos y la solicitud del usuario, responde UNICAMENTE con JSON, sin markdown, sin explicaciones:\n\n' +
-    '{\n' +
-    '  "title": "Título del informe",\n' +
-    '  "subtitle": "Subtítulo descriptivo",\n' +
-    '  "executiveSummary": "Resumen ejecutivo de 3-4 oraciones sobre el rendimiento del período",\n' +
-    '  "revenueAnalysis": "Análisis detallado de ingresos - menciona el producto que mas vendio, compara rendimientos, da contexto",\n' +
-    '  "costStructure": "Análisis de estructura de costos y gastos operativos",\n' +
-    '  "marginsAndProjections": "Análisis de márgenes de ganancia y proyecciones futuras si aplica",\n' +
-    '  "conclusions": "Conclusiones y recomendaciones accionables - responde DIRECTAMENTE a la solicitud del usuario"\n' +
-    '}\n\n' +
-    'IMPORTANTE: Usa números concretos de los datos. Las secciones deben tener 2-4 oraciones cada una. ' +
-    'La seccion "conclusions" debe responder específicamente a lo que el usuario pide. ' +
-    'Si pide recomendaciones para aumentar ganancias, da recomendaciones específicas. ' +
-    'Si pide el producto que mas vendio, mencionalo claramente. ' +
-    'Si pide proyecciones, haz proyecciones basadas en los datos.';
+    'Eres un asesor financiero experto que genera contenido para informes financieros profesionales en español.\n\n' +
+    'REGLAS ABSOLUTAS:\n' +
+    '1. Responde ÚNICAMENTE con un objeto JSON válido. Sin markdown, sin ```json, sin texto antes o después.\n' +
+    '2. El JSON debe tener exactamente estas 7 claves con valores string:\n' +
+    '   title, subtitle, executiveSummary, revenueAnalysis, costStructure, marginsAndProjections, conclusions\n' +
+    '3. Cada valor es un string con 2-4 oraciones. Usa números concretos de los datos.\n' +
+    '4. NO uses comillas dobles dentro de los valores — usa comillas simples si necesitas citar.\n' +
+    '5. El campo conclusions DEBE responder directamente a la solicitud específica del usuario.\n\n' +
+    'INSTRUCCIÓN ESPECIAL PARA conclusions:\n' +
+    '- Si el usuario pide saber qué vendió más → nombra el negocio con su monto exacto.\n' +
+    '- Si pide recomendaciones → da 2-3 acciones concretas basadas en los números.\n' +
+    '- Si pide proyecciones → calcula proyección anual extrapolando el período actual.\n' +
+    '- Si pide comparar → compara con números específicos.\n' +
+    '- Siempre termina con una recomendación accionable.\n\n' +
+    'Responde SOLO con el JSON, empezando con { y terminando con }. Nada más.';
 
   var fetch = require('node-fetch');
   var groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -177,7 +176,7 @@ async function generateAIContent(data, userRequest) {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: 'Solicitud del usuario: "' + userRequest + '"\n\n' + dataSummary }
       ],
-      max_tokens: 800,
+      max_tokens: 2000,
       temperature: 0.3
     })
   });
@@ -200,9 +199,7 @@ function esc(s) {
     .replace(/{/g, '\\{')
     .replace(/}/g, '\\}')
     .replace(/~/g, '\\textasciitilde{}')
-    .replace(/\^/g, '\\textasciicircum{}')
-    .replace(/'/g, "\\textquotesingle{}")
-    .replace(/"/g, "\\textquotedbl{}");
+    .replace(/\^/g, '\\textasciicircum{}');
 }
 
 function fmtQ(n) {
@@ -229,7 +226,7 @@ function buildLatex(data, content) {
   var bizRows = data.businesses.map(function(b) {
     var bal = parseFloat(b.balance);
     return '        ' + esc(b.name) + ' & ' + fmtQ(b.income) + ' & ' + fmtQ(b.expense) + ' & ' +
-      (bal >= 0 ? '' : '$\\color{red}$') + fmtQ(bal) + ' & ' + b.tx_count + ' \\\\';
+      (bal >= 0 ? fmtQ(bal) : '\\textcolor{red}{' + fmtQ(bal) + '}') + ' & ' + b.tx_count + ' \\\\';
   }).join('\n');
 
   return '\\documentclass[12pt, a4paper]{article}\n' +
@@ -262,7 +259,7 @@ function buildLatex(data, content) {
     '    \\vspace*{2cm}\n' +
     '    {\\Huge \\textbf{\\textcolor{primary}{' + reportTitle + '}}}\\\\[0.5cm]\n' +
     '    {\\Large ' + reportSub + '}\\\\[1.5cm]\n' +
-    '    {\\large \\textbf{Per\\u00edodo:} ' + period + '}\\\\[0.5cm]\n' +
+    '    {\\large \\textbf{Período:} ' + period + '}\\\\[0.5cm]\n' +
     '    {\\large \\textbf{Preparado por:} Centro de Mando}\\\\[2cm]\n' +
     '\\end{center}\n' +
     '\\newpage\n' +
@@ -295,7 +292,7 @@ function buildLatex(data, content) {
     '\\section{Estructura de Costos}\n' +
     (costStructure ? costStructure + '\n\n' : '') +
     '\\section{M\\\'{a}rgenes de Ganancia y Rentabilidad}\n' +
-    'El margen de ganancia bruta del per\\u00edodo es del \\textbf{' + grossMargin + '\\%}. ' +
+    'El margen de ganancia bruta del período es del \\textbf{' + grossMargin + '\\%}. ' +
     (marginsText ? marginsText : '') + '\n\n' +
     'La f\\\'{o}rmula utilizada para el c\\\'{a}lculo de la Utilidad Neta es:\n' +
     '\\begin{equation}\n' +
