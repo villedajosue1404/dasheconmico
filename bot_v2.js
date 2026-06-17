@@ -317,9 +317,7 @@ async function execute(chatId, intent, userName, msg) {
   if (a === 'report') {
     await tgSend(chatId, '⏳ Generando informe PDF...');
     try {
-      const { generateReport } = require('./ai');
-      const aiText = await generateReport(intent.period || 'resumen general', chatId);
-      const buf = await generatePDF(intent.period, aiText, uid, msg);
+      const buf = await generatePDF(intent.period, null, uid, msg);
       if (buf.length < 200) {
         await tgSend(chatId, '📄 ' + buf.toString('utf8'));
       } else {

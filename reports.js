@@ -118,39 +118,63 @@ async function getReportData(filter, userId) {
   };
 }
 
-// ── IA genera JSON de estilo, template LaTeX lo renderiza ──
-async function generateAIStyle(data, userRequest) {
+// ── IA genera contenido completo del informe ──
+async function generateAIContent(data, userRequest) {
   var key = process.env.GROQ_API_KEY;
   if (!key) return null;
 
-  var topBiz = data.businesses.slice(0, 3).map(function(b) {
-    return b.name + ': Q' + parseFloat(b.balance).toFixed(2);
-  }).join(', ');
+  var bizTable = data.businesses.map(function(b) {
+    return b.name + ' | Ingresos Q' + parseFloat(b.income).toFixed(2) +
+           ' | Gastos Q' + parseFloat(b.expense).toFixed(2) +
+           ' | Balance Q' + parseFloat(b.balance).toFixed(2) +
+           ' | Movimientos ' + b.tx_count;
+  }).join('\n');
+
+  var topProduct = data.businesses.slice().sort(function(a, b) {
+    return parseFloat(b.income) - parseFloat(a.income);
+  })[0];
+
+  var dataSummary =
+    'DATOS FINANCIEROS DEL PERIODO (' + data.dateFrom + ' al ' + data.dateTo + '):\n' +
+    'Ingresos totales: Q' + parseFloat(data.totalIncome).toFixed(2) + '\n' +
+    'Gastos totales: Q' + parseFloat(data.totalExpense).toFixed(2) + '\n' +
+    'Balance neto: Q' + parseFloat(data.totalBalance).toFixed(2) + '\n' +
+    'Total negocios: ' + data.businesses.length + '\n' +
+    'Total transacciones: ' + data.transactions.length + '\n' +
+    'Producto con mayores ingresos: ' + (topProduct ? topProduct.name + ' (Q' + parseFloat(topProduct.income).toFixed(2) + ')' : 'N/A') + '\n\n' +
+    'DETALLE POR NEGOCIO:\n' + bizTable;
 
   var systemPrompt =
-    'Eres un analisis financiero. Basado en los datos y la solicitud del usuario, ' +
-    'genera solo las VARIABLES de estilo para un informe PDF. ' +
-    'Responde UNICAMENTE con JSON, sin explicaciones, sin markdown:\n' +
-    '{"title":"titulo","subtitle":"subtitulo","highlight":"insight clave en 1 oracion",' +
-    '"focus":"ejecutivo|normal|detallado","theme":"moderno|clasico|minimalista"}\n\n' +
-    'Solicitud: "' + userRequest + '"';
+    'Eres un asesor financiero experto. Generas contenido para un informe financiero profesional. ' +
+    'Basado en los datos y la solicitud del usuario, responde UNICAMENTE con JSON, sin markdown, sin explicaciones:\n\n' +
+    '{\n' +
+    '  "title": "Título del informe",\n' +
+    '  "subtitle": "Subtítulo descriptivo",\n' +
+    '  "executiveSummary": "Resumen ejecutivo de 3-4 oraciones sobre el rendimiento del período",\n' +
+    '  "revenueAnalysis": "Análisis detallado de ingresos - menciona el producto que mas vendio, compara rendimientos, da contexto",\n' +
+    '  "costStructure": "Análisis de estructura de costos y gastos operativos",\n' +
+    '  "marginsAndProjections": "Análisis de márgenes de ganancia y proyecciones futuras si aplica",\n' +
+    '  "conclusions": "Conclusiones y recomendaciones accionables - responde DIRECTAMENTE a la solicitud del usuario"\n' +
+    '}\n\n' +
+    'IMPORTANTE: Usa números concretos de los datos. Las secciones deben tener 2-4 oraciones cada una. ' +
+    'La seccion "conclusions" debe responder específicamente a lo que el usuario pide. ' +
+    'Si pide recomendaciones para aumentar ganancias, da recomendaciones específicas. ' +
+    'Si pide el producto que mas vendio, mencionalo claramente. ' +
+    'Si pide proyecciones, haz proyecciones basadas en los datos.';
 
   var fetch = require('node-fetch');
   var groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(20000),
     body: JSON.stringify({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: 'Ingresos Q' + parseFloat(data.totalIncome).toFixed(2) +
-          ', gastos Q' + parseFloat(data.totalExpense).toFixed(2) +
-          ', balance Q' + parseFloat(data.totalBalance).toFixed(2) +
-          ', ' + data.businesses.length + ' negocios. Top: ' + topBiz }
+        { role: 'user', content: 'Solicitud del usuario: "' + userRequest + '"\n\n' + dataSummary }
       ],
-      max_tokens: 200,
-      temperature: 0.2
+      max_tokens: 800,
+      temperature: 0.3
     })
   });
   var groqData = await groqRes.json();
@@ -159,152 +183,189 @@ async function generateAIStyle(data, userRequest) {
   try { return JSON.parse(raw.replace(/```json|```/g, '').trim()); } catch(_) { return null; }
 }
 
-// ── Generar PDF con PDFKit (sin LaTeX) ──
-function buildPDF(data, aiAnalysis, style) {
+// ── Generar PDF con PDFKit - diseño profesional como LaTeX ──
+function buildPDF(data, content) {
   var PDFDocument = require('pdfkit');
-  var doc = new PDFDocument({ size: 'A4', margin: 50 });
+  var doc = new PDFDocument({ size: 'A4', margin: 60 });
   var buffers = [];
   doc.on('data', function(b) { buffers.push(b); });
 
-  // Estilo de IA
-  var reportTitle = (style && style.title) || 'Informe Financiero';
-  var highlightText = (style && style.highlight) || '';
-  var cAccent = (style && style.color_accent) || '#6C5CE7';
-  var cDark   = (style && style.theme === 'clasico') ? '#2C3E50' : '#1A1A2E';
+  var primary = '#003366';
+  var secondary = '#666666';
+  var black = '#222222';
+  var lightGray = '#F5F5F5';
 
   function Q(n) { return 'Q' + parseFloat(n || 0).toFixed(2); }
 
-  // ── PORTADA ──
-  doc.rect(0, 0, doc.page.width, 140).fill(cDark);
-  doc.fillColor('#6C5CE7').fontSize(28).font('Helvetica-Bold')
-     .text('Centro de Mando', 50, 30, { align: 'center', width: doc.page.width - 100 });
-  doc.fillColor('#FFFFFF').fontSize(18).font('Helvetica')
-     .text(reportTitle, 50, 70, { align: 'center', width: doc.page.width - 100 });
-  doc.fillColor('#888899').fontSize(10)
-     .text(data.period, 50, 100, { align: 'center', width: doc.page.width - 100 });
-  doc.fillColor('#888899').fontSize(9)
-     .text(data.dateFrom + ' al ' + data.dateTo + ' · ' + new Date().toLocaleDateString('es-GT'),
-           50, 115, { align: 'center', width: doc.page.width - 100 });
-
-  // ── HIGHLIGHT ──
-  if (highlightText) {
-    doc.y = 165;
-    doc.roundedRect(doc.x, doc.y, doc.page.width - 100, 40, 4).fill('#EDE9FF');
-    doc.fillColor(cAccent).fontSize(16).font('Helvetica-Bold')
-       .text('✦  ' + highlightText, 60, doc.y + 10, { width: doc.page.width - 120 });
-    doc.y += 60;
-  } else {
-    doc.y = 165;
+  function sectionTitle(text) {
+    doc.y += 10;
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(primary).text(text, 60, doc.y);
+    doc.moveTo(60, doc.y + 4).lineTo(doc.page.width - 60, doc.y + 4).lineWidth(1).stroke(primary);
+    doc.y += 16;
   }
 
-  // ── MÉTRICAS ──
-  var metricsY = doc.y + 10;
-  doc.fontSize(12).font('Helvetica-Bold').fillColor('#00875A')
-     .text('Ingresos', 50, metricsY);
-  doc.fillColor('#C0392B')
-     .text('Gastos', doc.page.width / 2 - 30, metricsY);
-  doc.fillColor(cAccent)
-     .text('Balance', doc.page.width - 160, metricsY);
-
-  doc.fontSize(20).font('Helvetica-Bold');
-  doc.fillColor('#00875A').text(Q(data.totalIncome), 50, metricsY + 18);
-  doc.fillColor('#C0392B').text(Q(data.totalExpense), doc.page.width / 2 - 30, metricsY + 18);
-  doc.fillColor(data.totalBalance >= 0 ? '#00875A' : '#C0392B')
-     .text(Q(data.totalBalance), doc.page.width - 160, metricsY + 18);
-
-  doc.y = metricsY + 55;
-
-  // ── TABLA NEGOCIOS ──
-  doc.fontSize(14).font('Helvetica-Bold').fillColor(cDark)
-     .text('Detalle por Negocio', 50, doc.y);
-  doc.y += 25;
-
-  var tableTop = doc.y;
-  var colX = [50, 150, 280, 380, 470];
-  var colW = [90, 120, 90, 80, 80];
-  var headers = ['Negocio', 'Ingresos', 'Gastos', 'Balance', 'Movs'];
-
-  // Header
-  doc.rect(50, tableTop, doc.page.width - 100, 20).fill(cDark);
-  doc.fillColor('#FFFFFF').fontSize(10).font('Helvetica-Bold');
-  headers.forEach(function(h, i) {
-    doc.text(h, colX[i], tableTop + 4, { width: colW[i], align: i === 0 ? 'left' : 'right' });
-  });
-
-  var row = tableTop + 20;
-  data.businesses.forEach(function(b, i) {
-    if (i % 2 === 0) doc.rect(50, row, doc.page.width - 100, 18).fill('#F4F4F8');
-    doc.fillColor('#000000').fontSize(9).font('Helvetica');
-    doc.text(b.name, colX[0], row + 4, { width: colW[0] });
-    doc.text(Q(b.income), colX[1], row + 4, { width: colW[1], align: 'right' });
-    doc.text(Q(b.expense), colX[2], row + 4, { width: colW[2], align: 'right' });
-    var bal = parseFloat(b.balance);
-    doc.fillColor(bal >= 0 ? '#00875A' : '#C0392B').font('Helvetica-Bold')
-       .text(Q(bal), colX[3], row + 4, { width: colW[3], align: 'right' });
-    doc.fillColor('#000000').font('Helvetica')
-       .text(String(b.tx_count), colX[4], row + 4, { width: colW[4], align: 'right' });
-    row += 18;
-  });
-
-  // Total row
-  doc.rect(50, row, doc.page.width - 100, 20).fill('#EDE9FF');
-  doc.fillColor(cDark).fontSize(10).font('Helvetica-Bold');
-  doc.text('TOTAL', colX[0], row + 4, { width: colW[0] });
-  doc.text(Q(data.totalIncome), colX[1], row + 4, { width: colW[1], align: 'right' });
-  doc.text(Q(data.totalExpense), colX[2], row + 4, { width: colW[2], align: 'right' });
-  doc.fillColor(data.totalBalance >= 0 ? '#00875A' : '#C0392B')
-     .text(Q(data.totalBalance), colX[3], row + 4, { width: colW[3], align: 'right' });
-  doc.fillColor(cDark).text(String(data.transactions.length), colX[4], row + 4, { width: colW[4], align: 'right' });
-
-  doc.y = row + 35;
-
-  // ── ANÁLISIS IA ──
-  if (aiAnalysis) {
-    if (doc.y > 600) doc.addPage();
-    doc.fontSize(14).font('Helvetica-Bold').fillColor(cDark)
-       .text('Análisis Inteligente', 50, doc.y);
-    doc.y += 20;
-    doc.roundedRect(50, doc.y, doc.page.width - 100, 60, 4).fill('#EDE9FF');
-    doc.fillColor('#333333').fontSize(10).font('Helvetica')
-       .text(aiAnalysis, 60, doc.y + 10, { width: doc.page.width - 120 });
-    doc.y += 80;
+  function bodyText(text) {
+    if (!text) return;
+    doc.fontSize(10).font('Helvetica').fillColor(black);
+    var lines = text.split('\n');
+    lines.forEach(function(line) {
+      doc.text(line.trim(), 60, doc.y, { width: doc.page.width - 120, align: 'justify', lineGap: 4 });
+      doc.y += 6;
+    });
+    doc.y += 6;
   }
 
-  // ── TRANSACCIONES ──
-  if (data.transactions.length) {
-    if (doc.y > 500) doc.addPage();
-    doc.fontSize(14).font('Helvetica-Bold').fillColor(cDark)
-       .text('Transacciones del Período', 50, doc.y);
-    doc.y += 25;
+  function metricBox(label, value, x, y, color) {
+    doc.roundedRect(x, y, 140, 50, 4).fill(lightGray);
+    doc.fillColor(secondary).fontSize(8).font('Helvetica').text(label, x + 10, y + 6, { width: 120, align: 'center' });
+    doc.fillColor(color).fontSize(16).font('Helvetica-Bold').text(value, x + 10, y + 22, { width: 120, align: 'center' });
+  }
 
-    var txColX = [50, 120, 190, 240, 430];
-    var txHeaders = ['Fecha', 'Negocio', 'Tipo', 'Descripción', 'Monto'];
-    doc.rect(50, doc.y, doc.page.width - 100, 18).fill(cDark);
+  function drawTable(headers, rows, colWidths) {
+    var tableX = 60;
+    var tableW = doc.page.width - 120;
+    var rowH = 20;
+    var headerH = 22;
+    var currentY = doc.y;
+
+    if (currentY + (rows.length + 1) * rowH > doc.page.height - 80) {
+      addPageFooter();
+      doc.addPage();
+      currentY = 60;
+    }
+
+    // Header
+    doc.rect(tableX, currentY, tableW, headerH).fill(primary);
     doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold');
-    txHeaders.forEach(function(h, i) {
-      doc.text(h, txColX[i], doc.y + 4, { width: 170, align: i === 4 ? 'right' : 'left' });
+    var xOffset = tableX;
+    headers.forEach(function(h, i) {
+      doc.text(h, xOffset + 6, currentY + 5, { width: colWidths[i] - 12, align: i === 0 ? 'left' : 'right' });
+      xOffset += colWidths[i];
     });
-    doc.y += 18;
 
-    data.transactions.slice(0, 30).forEach(function(t) {
-      if (doc.y > 750) { doc.addPage(); doc.y = 50; }
-      var isInc = t.type === 'income';
-      doc.fillColor('#000000').fontSize(8).font('Helvetica');
-      doc.text(String(t.date).slice(0, 10), txColX[0], doc.y + 2, { width: 70 });
-      doc.text(t.business, txColX[1], doc.y + 2, { width: 70 });
-      doc.fillColor(isInc ? '#00875A' : '#C0392B').text(isInc ? 'Ingreso' : 'Gasto', txColX[2], doc.y + 2, { width: 50 });
-      doc.fillColor('#000000').text((t.description || '').slice(0, 35), txColX[3], doc.y + 2, { width: 190 });
-      doc.fillColor(isInc ? '#00875A' : '#C0392B').font('Helvetica-Bold')
-         .text((isInc ? '+' : '-') + Q(t.amount), txColX[4], doc.y + 2, { width: 110, align: 'right' });
-      doc.y += 14;
+    // Rows
+    var rowY = currentY + headerH;
+    rows.forEach(function(row, i) {
+      if (rowY + rowH > doc.page.height - 60) {
+        doc.addPage();
+        rowY = 60;
+      }
+      if (i % 2 === 0) doc.rect(tableX, rowY, tableW, rowH).fill(lightGray);
+      var xOff = tableX;
+      doc.fontSize(9).font('Helvetica');
+      row.forEach(function(cell, j) {
+        var isLastCol = j === row.length - 1;
+        var isBalanceCol = j === 3;
+        doc.fillColor(isLastCol && isBalanceCol ? (parseFloat(cell) >= 0 ? primary : '#C0392B') : black);
+        doc.font(isLastCol && isBalanceCol ? 'Helvetica-Bold' : 'Helvetica');
+        var text = typeof cell === 'number' ? Q(cell) : String(cell);
+        doc.text(text, xOff + 6, rowY + 4, { width: colWidths[j] - 12, align: j === 0 ? 'left' : 'right' });
+        xOff += colWidths[j];
+      });
+      rowY += rowH;
     });
+
+    // Total row
+    if (rowY + rowH > doc.page.height - 60) { doc.addPage(); rowY = 60; }
+    doc.rect(tableX, rowY, tableW, rowH).fill(lightGray);
+    xOffset = tableX;
+    doc.fontSize(9).font('Helvetica-Bold');
+    var totalCells = ['TOTAL', Q(data.totalIncome), Q(data.totalExpense), Q(data.totalBalance)];
+    totalCells.forEach(function(cell, j) {
+      doc.fillColor(j === 3 ? (data.totalBalance >= 0 ? primary : '#C0392B') : primary);
+      doc.text(String(cell), xOffset + 6, rowY + 4, { width: colWidths[j] - 12, align: j === 0 ? 'left' : 'right' });
+      xOffset += colWidths[j];
+    });
+
+    doc.y = rowY + rowH + 15;
   }
 
-  // ── PIE DE PÁGINA ──
-  doc.on('pageAdded', function() {
-    var n = doc.bufferedPageRange().count;
-  });
+  function addPageFooter() {
+    var y = doc.page.height - 40;
+    doc.fontSize(8).font('Helvetica').fillColor(secondary);
+    doc.text('Reporte Financiero Mensual', 50, y, { align: 'left', width: 200 });
+    doc.text('Pág. ' + doc.bufferedPageRange().count, doc.page.width - 80, y, { align: 'right', width: 30 });
+    doc.moveTo(50, y - 6).lineTo(doc.page.width - 50, y - 6).lineWidth(0.5).stroke(secondary);
+  }
 
+  // ── PORTADA ──
+  doc.rect(0, 0, doc.page.width, 160).fill(primary);
+
+  doc.fillColor('#FFFFFF').fontSize(30).font('Helvetica-Bold')
+     .text('Reporte Financiero y Operativo', 60, 40, { align: 'center', width: doc.page.width - 120 });
+
+  doc.fillColor('#CCCCCC').fontSize(14).font('Helvetica')
+     .text(content && content.subtitle ? content.subtitle : 'Análisis de Ingresos, Costos y Márgenes de Ganancia',
+           60, 85, { align: 'center', width: doc.page.width - 120 });
+
+  doc.y = 130;
+  doc.fillColor('#FFFFFF').fontSize(11).font('Helvetica')
+     .text('Período: ' + data.period, 60, doc.y, { align: 'center', width: doc.page.width - 120 });
+  doc.y += 18;
+  doc.fillColor('#CCCCCC').fontSize(10).font('Helvetica')
+     .text('Preparado por: Centro de Mando · ' + new Date().toLocaleDateString('es-GT'),
+           60, doc.y, { align: 'center', width: doc.page.width - 120 });
+
+  doc.y = doc.page.height - 60;
+  doc.fillColor('#999999').fontSize(8).font('Helvetica')
+     .text('Documento generado automáticamente · ' + data.dateFrom + ' al ' + data.dateTo,
+           60, doc.y, { align: 'center', width: doc.page.width - 120 });
+
+  // ── RESUMEN EJECUTIVO ──
+  addPageFooter();
+  doc.addPage();
+  doc.y = 60;
+
+  sectionTitle('Resumen Ejecutivo');
+  bodyText(content && content.executiveSummary);
+
+  var boxY = doc.y + 6;
+  var boxW = (doc.page.width - 160) / 3;
+  metricBox('Total Ingresos', Q(data.totalIncome), 60, boxY, primary);
+  metricBox('Total Gastos', Q(data.totalExpense), 60 + boxW + 20, boxY, secondary);
+  var balColor = data.totalBalance >= 0 ? primary : '#C0392B';
+  metricBox('Balance Neto', Q(data.totalBalance), 60 + 2 * (boxW + 20), boxY, balColor);
+  doc.y = boxY + 70;
+
+  // ── ANÁLISIS DE INGRESOS ──
+  sectionTitle('Análisis de Ingresos');
+  bodyText(content && content.revenueAnalysis);
+
+  var colWidths = [80, 100, 80, 80, 60];
+  var headers = ['Negocio', 'Ingresos', 'Gastos', 'Balance', 'Movs'];
+  var rows = data.businesses.map(function(b) {
+    return [b.name, parseFloat(b.income), parseFloat(b.expense), parseFloat(b.balance), parseInt(b.tx_count)];
+  });
+  drawTable(headers, rows, colWidths);
+
+  // ── ESTRUCTURA DE COSTOS ──
+  if (doc.y > 600) { addPageFooter(); doc.addPage(); }
+  sectionTitle('Estructura de Costos');
+  bodyText(content && content.costStructure);
+
+  // ── MÁRGENES Y PROYECCIONES ──
+  if (doc.y > 600) { addPageFooter(); doc.addPage(); }
+  sectionTitle('Márgenes de Ganancia y Rentabilidad');
+
+  var grossMargin = data.totalIncome > 0
+    ? ((data.totalIncome - data.totalExpense) / data.totalIncome * 100).toFixed(1)
+    : '0.0';
+  var marginColor = parseFloat(grossMargin) >= 30 ? primary : '#C0392B';
+
+  doc.fontSize(10).font('Helvetica').fillColor(black);
+  doc.text('El margen de ganancia bruta del período es del ', 60, doc.y, { continued: true });
+  doc.font('Helvetica-Bold').fillColor(marginColor).text(grossMargin + '%', { continued: true });
+  doc.font('Helvetica').fillColor(black).text('.');
+
+  doc.y += 16;
+  bodyText(content && content.marginsAndProjections);
+
+  // ── CONCLUSIONES ──
+  if (doc.y > 600) { addPageFooter(); doc.addPage(); }
+  sectionTitle('Conclusiones y Próximos Pasos');
+  bodyText(content && content.conclusions);
+
+  addPageFooter();
   doc.end();
   return new Promise(function(resolve) {
     doc.on('end', function() {
@@ -312,15 +373,16 @@ function buildPDF(data, aiAnalysis, style) {
     });
   });
 }
+}
 
 // ── generatePDF: entrada pública ──
 async function generatePDF(filter, aiAnalysis, userId, userRequest) {
   const data = await getReportData(filter, userId);
-  var style = null;
+  var content = null;
   if (userRequest) {
-    try { style = await generateAIStyle(data, userRequest); } catch(_) {}
+    try { content = await generateAIContent(data, userRequest); } catch(_) {}
   }
-  return await buildPDF(data, aiAnalysis, style);
+  return await buildPDF(data, content);
 }
 
 // ── generateExcel: corregido con filtro por negocio ──
