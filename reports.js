@@ -1,34 +1,9 @@
 // ============================================================
-// REPORTS.JS — PDF con LaTeX (lualatex) + Excel con ExcelJS
-// PDF profesional estilo académico, filtrado por negocio
+// REPORTS.JS — PDF con PDFKit + Excel con ExcelJS
 // ============================================================
 
-const { execSync }  = require('child_process');
-const fs            = require('fs');
-const os            = require('os');
-const path          = require('path');
 const ExcelJS       = require('exceljs');
 const { pool }      = require('./db/schema');
-
-// ── Escapa caracteres especiales de LaTeX ──
-function esc(s) {
-  if (s === null || s === undefined) return '';
-  return String(s)
-    .replace(/\\/g, '\\textbackslash{}')
-    .replace(/&/g, '\\&')
-    .replace(/%/g, '\\%')
-    .replace(/\$/g, '\\$')
-    .replace(/#/g, '\\#')
-    .replace(/_/g, '\\_')
-    .replace(/\{/g, '\\{')
-    .replace(/\}/g, '\\}')
-    .replace(/~/g, '\\textasciitilde{}')
-    .replace(/\^/g, '\\textasciicircum{}');
-}
-
-function fmtQ(n) {
-  return 'Q\\,' + parseFloat(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '{,}');
-}
 
 // ── Parsear período y detectar negocio específico en el filtro ──
 function parseFilter(filter) {
@@ -154,7 +129,7 @@ async function generateAIStyle(data, userRequest) {
 
   var systemPrompt =
     'Eres un analisis financiero. Basado en los datos y la solicitud del usuario, ' +
-    'genera solo las VARIABLES de estilo para un informe LaTeX. ' +
+    'genera solo las VARIABLES de estilo para un informe PDF. ' +
     'Responde UNICAMENTE con JSON, sin explicaciones, sin markdown:\n' +
     '{"title":"titulo","subtitle":"subtitulo","highlight":"insight clave en 1 oracion",' +
     '"focus":"ejecutivo|normal|detallado","theme":"moderno|clasico|minimalista"}\n\n' +
@@ -184,198 +159,158 @@ async function generateAIStyle(data, userRequest) {
   try { return JSON.parse(raw.replace(/```json|```/g, '').trim()); } catch(_) { return null; }
 }
 
-// ── Generar el .tex del informe ──
-function buildTex(data, aiAnalysis, style) {
-  const genDate = new Date().toLocaleDateString('es-GT');
-  const balColor = data.totalBalance >= 0 ? 'colorgreen' : 'colorred';
+// ── Generar PDF con PDFKit (sin LaTeX) ──
+function buildPDF(data, aiAnalysis, style) {
+  var PDFDocument = require('pdfkit');
+  var doc = new PDFDocument({ size: 'A4', margin: 50 });
+  var buffers = [];
+  doc.on('data', function(b) { buffers.push(b); });
 
-  // Aplicar estilo generado por IA si existe
-  var reportTitle = style && style.title ? esc(style.title) : 'Informe Financiero';
-  var reportSub   = style && style.subtitle ? esc(style.subtitle) : esc(data.period);
-  var highlightText = style && style.highlight ? esc(style.highlight) : '';
-  var accentColor   = style && style.color_accent ? style.color_accent : '6C5CE7';
-  var theme         = style && style.theme ? style.theme : 'moderno';
+  // Estilo de IA
+  var reportTitle = (style && style.title) || 'Informe Financiero';
+  var highlightText = (style && style.highlight) || '';
+  var cAccent = (style && style.color_accent) || '#6C5CE7';
+  var cDark   = (style && style.theme === 'clasico') ? '#2C3E50' : '#1A1A2E';
 
-  // Tema de colores
-  var cAccent = accentColor;
-  var cDark   = theme === 'clasico' ? '2C3E50' : '1A1A2E';
-  var cGreen  = '00875A';
-  var cRed    = 'C0392B';
+  function Q(n) { return 'Q' + parseFloat(n || 0).toFixed(2); }
 
-  // Tabla de negocios
-  const bizRows = data.businesses.map(b => {
-    const bal = parseFloat(b.balance);
-    const balCol = bal >= 0 ? 'colorgreen' : 'colorred';
-    return `  \\textbf{${esc(b.name)}} & ${esc(fmtQ(b.income))} & ${esc(fmtQ(b.expense))} & {\\color{${balCol}}\\textbf{${esc(fmtQ(bal))}}} & ${b.tx_count} \\\\`;
-  }).join('\n');
+  // ── PORTADA ──
+  doc.rect(0, 0, doc.page.width, 140).fill(cDark);
+  doc.fillColor('#6C5CE7').fontSize(28).font('Helvetica-Bold')
+     .text('Centro de Mando', 50, 30, { align: 'center', width: doc.page.width - 100 });
+  doc.fillColor('#FFFFFF').fontSize(18).font('Helvetica')
+     .text(reportTitle, 50, 70, { align: 'center', width: doc.page.width - 100 });
+  doc.fillColor('#888899').fontSize(10)
+     .text(data.period, 50, 100, { align: 'center', width: doc.page.width - 100 });
+  doc.fillColor('#888899').fontSize(9)
+     .text(data.dateFrom + ' al ' + data.dateTo + ' · ' + new Date().toLocaleDateString('es-GT'),
+           50, 115, { align: 'center', width: doc.page.width - 100 });
 
-  // Tabla de transacciones (máx 50)
-  const txRows = data.transactions.slice(0, 50).map(t => {
-    const isInc = t.type === 'income';
-    const amtColor = isInc ? 'colorgreen' : 'colorred';
-    const sign = isInc ? '+' : '-';
-    const dateStr = t.date ? String(t.date).slice(0, 10) : '';
-    const desc = esc(t.description || t.category || '—').slice(0, 45);
-    return `  ${esc(dateStr)} & ${esc(t.business)} & ${isInc ? 'Ingreso' : 'Gasto'} & ${desc} & {\\color{${amtColor}}${sign}${esc(fmtQ(t.amount))}} \\\\`;
-  }).join('\n');
-
-  // Análisis IA
-  const aiSection = aiAnalysis ? `
-\\section*{Análisis Inteligente}
-\\begin{tcolorbox}[colback=accentbg,colframe=accent,title={\\faRobot\\quad Generado por IA -- Centro de Mando}]
-${esc(aiAnalysis)}
-\\end{tcolorbox}
-` : '';
-
-  const txSection = data.transactions.length > 0 ? `
-\\newpage
-\\section*{Transacciones del Período}
-
-\\begin{longtable}{p{2cm}p{3cm}p{1.8cm}p{5.5cm}r}
-\\toprule
-\\rowcolor{darkbg}
-\\color{white}\\textbf{Fecha} & \\color{white}\\textbf{Negocio} & \\color{white}\\textbf{Tipo} & \\color{white}\\textbf{Descripción} & \\color{white}\\textbf{Monto} \\\\
-\\midrule
-\\endhead
-${txRows}
-\\bottomrule
-\\end{longtable}
-` : '';
-
-  return `\\documentclass[11pt,a4paper]{article}
-\\usepackage[utf8]{inputenc}
-\\usepackage[T1]{fontenc}
-\\usepackage[spanish]{babel}
-\\usepackage{xcolor}
-\\usepackage{geometry}
-\\usepackage{booktabs}
-\\usepackage{longtable}
-\\usepackage{colortbl}
-\\usepackage{tabularx}
-\\usepackage[breakable,skins]{tcolorbox}
-\\usepackage{titlesec}
-\\usepackage{parskip}
-\\usepackage{fancyhdr}
-\\usepackage{graphicx}
-\\usepackage{array}
-\\usepackage{anyfontsize}
-
-\\geometry{top=2cm,bottom=2.5cm,left=2.5cm,right=2.5cm}
-
-% Colores
-\\definecolor{accent}{HTML}{${cAccent}}
-\\definecolor{accentbg}{HTML}{EDE9FF}
-\\definecolor{colorgreen}{HTML}{${cGreen}}
-\\definecolor{colorred}{HTML}{${cRed}}
-\\definecolor{darkbg}{HTML}{${cDark}}
-\\definecolor{lightgray}{HTML}{F4F4F8}
-\\definecolor{medgray}{HTML}{888899}
-
-% Encabezado y pie
-\\pagestyle{fancy}
-\\fancyhf{}
-\\renewcommand{\\headrulewidth}{0pt}
-\\fancyhead[L]{\\small\\color{medgray} Centro de Mando}
-\\fancyhead[R]{\\small\\color{medgray} ${esc(data.period)}}
-\\fancyfoot[C]{\\small\\color{medgray} Página \\thepage}
-
-% Títulos de sección
-\\titleformat{\\section*}{\\Large\\bfseries\\color{darkbg}}{}{0em}{}[\\color{accent}\\titlerule]
-
-\\begin{document}
-
-% ── PORTADA ──────────────────────────────────────────────────
-\\begin{center}
-  \\colorbox{darkbg}{\\parbox{\\textwidth}{
-    \\vspace{12pt}
-    \\centering
-    {\\fontsize{26}{30}\\selectfont\\bfseries\\color{accent} Centro de Mando}\\\\[6pt]
-    {\\large\\color{white} ${reportTitle}}\\\\[4pt]
-    {\\normalsize\\color{medgray} ${reportSub}}\\\\[6pt]
-    {\\small\\color{medgray} Generado el ${esc(genDate)} $\\cdot$ ${esc(data.dateFrom)} al ${esc(data.dateTo)}}\\\\[12pt]
-  }}
-\\end{center}
-
-\\vspace{16pt}
-
-% ── MÉTRICAS PRINCIPALES ──────────────────────────────────────
-\\section*{Resumen Ejecutivo}
-
-\\begin{tabular}{p{4.5cm}p{4.5cm}p{4.5cm}}
-\\cellcolor{green!12}\\textbf{\\color{colorgreen}Total Ingresos} &
-\\cellcolor{red!12}\\textbf{\\color{colorred}Total Gastos} &
-\\cellcolor{accentbg}\\textbf{\\color{accent}Balance Neto} \\\\[4pt]
-\\cellcolor{green!12}{\\LARGE\\color{colorgreen} ${esc(fmtQ(data.totalIncome))}} &
-\\cellcolor{red!12}{\\LARGE\\color{colorred} ${esc(fmtQ(data.totalExpense))}} &
-\\cellcolor{accentbg}{\\LARGE\\color{${balColor}} ${esc(fmtQ(data.totalBalance))}} \\\\[6pt]
-\\end{tabular}
-
-\\vspace{18pt}
-
-${highlightText ? `
-% ── HIGHLIGHT IA ─────────────────────────────────────────────
-\\begin{tcolorbox}[colback=accentbg,colframe=accent,arc=6pt]
-\\textbf{\\color{accent}\\Large ${esc('✦')}} \\hspace{6pt} {\\large\\textbf{${highlightText}}}
-\\end{tcolorbox}
-\\vspace{12pt}
-` : ''}
-
-% ── DETALLE POR NEGOCIO ───────────────────────────────────────
-\\section*{Detalle por Negocio}
-
-\\begin{tabular}{lrrrr}
-\\toprule
-\\rowcolor{darkbg}
-\\color{white}\\textbf{Negocio} & \\color{white}\\textbf{Ingresos} & \\color{white}\\textbf{Gastos} & \\color{white}\\textbf{Balance} & \\color{white}\\textbf{Movimientos} \\\\
-\\midrule
-${bizRows}
-\\midrule
-\\textbf{TOTAL} & \\textbf{${esc(fmtQ(data.totalIncome))}} & \\textbf{${esc(fmtQ(data.totalExpense))}} & {\\color{${balColor}}\\textbf{${esc(fmtQ(data.totalBalance))}}} & \\textbf{${data.transactions.length}} \\\\
-\\bottomrule
-\\end{tabular}
-
-${aiSection}
-${txSection}
-
-\\end{document}`;
-}
-
-// ── Compilar LaTeX → PDF buffer ──
-async function compileTex(texSource) {
-  // Verificar que pdflatex existe
-  try {
-    execSync('pdflatex --version', { timeout: 5000, stdio: 'pipe' });
-  } catch(e) {
-    throw new Error('pdflatex no instalado');
+  // ── HIGHLIGHT ──
+  if (highlightText) {
+    doc.y = 165;
+    doc.roundedRect(doc.x, doc.y, doc.page.width - 100, 40, 4).fill('#EDE9FF');
+    doc.fillColor(cAccent).fontSize(16).font('Helvetica-Bold')
+       .text('✦  ' + highlightText, 60, doc.y + 10, { width: doc.page.width - 120 });
+    doc.y += 60;
+  } else {
+    doc.y = 165;
   }
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmd-report-'));
-  const texFile = path.join(tmpDir, 'report.tex');
-  const pdfFile = path.join(tmpDir, 'report.pdf');
-  const logFile = path.join(tmpDir, 'report.log');
+  // ── MÉTRICAS ──
+  var metricsY = doc.y + 10;
+  doc.fontSize(12).font('Helvetica-Bold').fillColor('#00875A')
+     .text('Ingresos', 50, metricsY);
+  doc.fillColor('#C0392B')
+     .text('Gastos', doc.page.width / 2 - 30, metricsY);
+  doc.fillColor(cAccent)
+     .text('Balance', doc.page.width - 160, metricsY);
 
-  try {
-    fs.writeFileSync(texFile, texSource, 'utf8');
-    const cmd = `pdflatex -interaction=nonstopmode -output-directory="${tmpDir}" "${texFile}"`;
-    execSync(cmd, { timeout: 30000, stdio: 'pipe' });
-    execSync(cmd, { timeout: 30000, stdio: 'pipe' });
+  doc.fontSize(20).font('Helvetica-Bold');
+  doc.fillColor('#00875A').text(Q(data.totalIncome), 50, metricsY + 18);
+  doc.fillColor('#C0392B').text(Q(data.totalExpense), doc.page.width / 2 - 30, metricsY + 18);
+  doc.fillColor(data.totalBalance >= 0 ? '#00875A' : '#C0392B')
+     .text(Q(data.totalBalance), doc.page.width - 160, metricsY + 18);
 
-    if (!fs.existsSync(pdfFile)) {
-      var log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').slice(-1000) : 'sin log';
-      throw new Error('PDF no generado. Log:\n' + log);
-    }
-    return fs.readFileSync(pdfFile);
-  } catch(e) {
-    if (e.message.includes('pdflatex no instalado')) throw e;
-    if (!e.message.includes('PDF no generado')) {
-      var log = '';
-      try { log = fs.readFileSync(logFile, 'utf8').slice(-500); } catch(_) {}
-      e.message += log ? '\nLog: ' + log : '';
-    }
-    throw e;
-  } finally {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch(_) {}
+  doc.y = metricsY + 55;
+
+  // ── TABLA NEGOCIOS ──
+  doc.fontSize(14).font('Helvetica-Bold').fillColor(cDark)
+     .text('Detalle por Negocio', 50, doc.y);
+  doc.y += 25;
+
+  var tableTop = doc.y;
+  var colX = [50, 150, 280, 380, 470];
+  var colW = [90, 120, 90, 80, 80];
+  var headers = ['Negocio', 'Ingresos', 'Gastos', 'Balance', 'Movs'];
+
+  // Header
+  doc.rect(50, tableTop, doc.page.width - 100, 20).fill(cDark);
+  doc.fillColor('#FFFFFF').fontSize(10).font('Helvetica-Bold');
+  headers.forEach(function(h, i) {
+    doc.text(h, colX[i], tableTop + 4, { width: colW[i], align: i === 0 ? 'left' : 'right' });
+  });
+
+  var row = tableTop + 20;
+  data.businesses.forEach(function(b, i) {
+    if (i % 2 === 0) doc.rect(50, row, doc.page.width - 100, 18).fill('#F4F4F8');
+    doc.fillColor('#000000').fontSize(9).font('Helvetica');
+    doc.text(b.name, colX[0], row + 4, { width: colW[0] });
+    doc.text(Q(b.income), colX[1], row + 4, { width: colW[1], align: 'right' });
+    doc.text(Q(b.expense), colX[2], row + 4, { width: colW[2], align: 'right' });
+    var bal = parseFloat(b.balance);
+    doc.fillColor(bal >= 0 ? '#00875A' : '#C0392B').font('Helvetica-Bold')
+       .text(Q(bal), colX[3], row + 4, { width: colW[3], align: 'right' });
+    doc.fillColor('#000000').font('Helvetica')
+       .text(String(b.tx_count), colX[4], row + 4, { width: colW[4], align: 'right' });
+    row += 18;
+  });
+
+  // Total row
+  doc.rect(50, row, doc.page.width - 100, 20).fill('#EDE9FF');
+  doc.fillColor(cDark).fontSize(10).font('Helvetica-Bold');
+  doc.text('TOTAL', colX[0], row + 4, { width: colW[0] });
+  doc.text(Q(data.totalIncome), colX[1], row + 4, { width: colW[1], align: 'right' });
+  doc.text(Q(data.totalExpense), colX[2], row + 4, { width: colW[2], align: 'right' });
+  doc.fillColor(data.totalBalance >= 0 ? '#00875A' : '#C0392B')
+     .text(Q(data.totalBalance), colX[3], row + 4, { width: colW[3], align: 'right' });
+  doc.fillColor(cDark).text(String(data.transactions.length), colX[4], row + 4, { width: colW[4], align: 'right' });
+
+  doc.y = row + 35;
+
+  // ── ANÁLISIS IA ──
+  if (aiAnalysis) {
+    if (doc.y > 600) doc.addPage();
+    doc.fontSize(14).font('Helvetica-Bold').fillColor(cDark)
+       .text('Análisis Inteligente', 50, doc.y);
+    doc.y += 20;
+    doc.roundedRect(50, doc.y, doc.page.width - 100, 60, 4).fill('#EDE9FF');
+    doc.fillColor('#333333').fontSize(10).font('Helvetica')
+       .text(aiAnalysis, 60, doc.y + 10, { width: doc.page.width - 120 });
+    doc.y += 80;
   }
+
+  // ── TRANSACCIONES ──
+  if (data.transactions.length) {
+    if (doc.y > 500) doc.addPage();
+    doc.fontSize(14).font('Helvetica-Bold').fillColor(cDark)
+       .text('Transacciones del Período', 50, doc.y);
+    doc.y += 25;
+
+    var txColX = [50, 120, 190, 240, 430];
+    var txHeaders = ['Fecha', 'Negocio', 'Tipo', 'Descripción', 'Monto'];
+    doc.rect(50, doc.y, doc.page.width - 100, 18).fill(cDark);
+    doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold');
+    txHeaders.forEach(function(h, i) {
+      doc.text(h, txColX[i], doc.y + 4, { width: 170, align: i === 4 ? 'right' : 'left' });
+    });
+    doc.y += 18;
+
+    data.transactions.slice(0, 30).forEach(function(t) {
+      if (doc.y > 750) { doc.addPage(); doc.y = 50; }
+      var isInc = t.type === 'income';
+      doc.fillColor('#000000').fontSize(8).font('Helvetica');
+      doc.text(String(t.date).slice(0, 10), txColX[0], doc.y + 2, { width: 70 });
+      doc.text(t.business, txColX[1], doc.y + 2, { width: 70 });
+      doc.fillColor(isInc ? '#00875A' : '#C0392B').text(isInc ? 'Ingreso' : 'Gasto', txColX[2], doc.y + 2, { width: 50 });
+      doc.fillColor('#000000').text((t.description || '').slice(0, 35), txColX[3], doc.y + 2, { width: 190 });
+      doc.fillColor(isInc ? '#00875A' : '#C0392B').font('Helvetica-Bold')
+         .text((isInc ? '+' : '-') + Q(t.amount), txColX[4], doc.y + 2, { width: 110, align: 'right' });
+      doc.y += 14;
+    });
+  }
+
+  // ── PIE DE PÁGINA ──
+  doc.on('pageAdded', function() {
+    var n = doc.bufferedPageRange().count;
+  });
+
+  doc.end();
+  return new Promise(function(resolve) {
+    doc.on('end', function() {
+      resolve(Buffer.concat(buffers));
+    });
+  });
 }
 
 // ── generatePDF: entrada pública ──
@@ -385,23 +320,7 @@ async function generatePDF(filter, aiAnalysis, userId, userRequest) {
   if (userRequest) {
     try { style = await generateAIStyle(data, userRequest); } catch(_) {}
   }
-  var tex = buildTex(data, aiAnalysis, style);
-  try {
-    return await compileTex(tex);
-  } catch(e) {
-    console.error('PDF LaTeX error:', e.message);
-    // Fallback: texto plano
-    var txt = 'INFORME ' + data.period.toUpperCase() + '\n';
-    txt += 'Del ' + data.dateFrom + ' al ' + data.dateTo + '\n\n';
-    txt += 'Ingresos: Q' + parseFloat(data.totalIncome).toFixed(2) + '\n';
-    txt += 'Gastos:   Q' + parseFloat(data.totalExpense).toFixed(2) + '\n';
-    txt += 'Balance:  Q' + parseFloat(data.totalBalance).toFixed(2) + '\n\n';
-    txt += 'NEGOCIOS:\n';
-    data.businesses.forEach(function(b) {
-      txt += '  ' + b.name + ': Q' + parseFloat(b.balance).toFixed(2) + '\n';
-    });
-    return Buffer.from(txt, 'utf8');
-  }
+  return await buildPDF(data, aiAnalysis, style);
 }
 
 // ── generateExcel: corregido con filtro por negocio ──

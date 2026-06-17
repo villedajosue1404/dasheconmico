@@ -1,7 +1,6 @@
 [phases.setup]
 nixPkgs = [
-  "nodejs_20",
-  "texlive.combined.scheme-small"
+  "nodejs_20"
 ]
 
 [phases.install]
