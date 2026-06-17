@@ -143,65 +143,64 @@ async function getReportData(filter, userId) {
   };
 }
 
-// ── Generar .tex con IA (Groq) ──
-async function generateAITex(data, userRequest, userId) {
+// ── IA genera JSON de estilo, template LaTeX lo renderiza ──
+async function generateAIStyle(data, userRequest) {
   var key = process.env.GROQ_API_KEY;
   if (!key) return null;
 
-  var dataSummary = JSON.stringify({
-    period: data.period,
-    dateFrom: data.dateFrom,
-    dateTo: data.dateTo,
-    totalIncome: data.totalIncome,
-    totalExpense: data.totalExpense,
-    totalBalance: data.totalBalance,
-    businesses: data.businesses.map(function(b) {
-      return { name: b.name, income: b.income, expense: b.expense, balance: b.balance, tx_count: b.tx_count };
-    }),
-    transactions: data.transactions.slice(0, 30).map(function(t) {
-      return { date: t.date, business: t.business, type: t.type, amount: t.amount, description: t.description, category: t.category };
-    })
-  }, null, 2);
+  var topBiz = data.businesses.slice(0, 3).map(function(b) {
+    return b.name + ': Q' + parseFloat(b.balance).toFixed(2);
+  }).join(', ');
 
   var systemPrompt =
-    'Eres un diseñador de informes financieros experto en LaTeX. ' +
-    'Genera código LaTeX profesional, elegante y con estilo moderno. ' +
-    'Usa el paquete fontspec con DejaVu Sans, xcolor, booktabs, longtable, colortbl, tcolorbox, titlesec, fancyhdr, graphicx. ' +
-    'Colores: accent=6C5CE7, darkbg=1A1A2E, green=00875A, red=C0392B. ' +
-    'Devuelve ÚNICAMENTE el código LaTeX completo, SIN markdown, SIN explicaciones, SIN bloques ```. ' +
-    'El documento debe tener: portada elegante, resumen ejecutivo con 3 métricas clave, tabla de negocios, ' +
-    'y tabla de transacciones. Usa \\newpage si es necesario.\n\n' +
-    'La solicitud del usuario fue: "' + userRequest + '"\n\n' +
-    'Aplica el estilo que el usuario pide (ejecutivo, minimalista, colorido, con gráficos, etc.).';
+    'Eres un analisis financiero. Basado en los datos y la solicitud del usuario, ' +
+    'genera solo las VARIABLES de estilo para un informe LaTeX. ' +
+    'Responde UNICAMENTE con JSON, sin explicaciones, sin markdown:\n' +
+    '{"title":"titulo","subtitle":"subtitulo","highlight":"insight clave en 1 oracion",' +
+    '"focus":"ejecutivo|normal|detallado","theme":"moderno|clasico|minimalista"}\n\n' +
+    'Solicitud: "' + userRequest + '"';
 
   var fetch = require('node-fetch');
   var groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(15000),
     body: JSON.stringify({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: 'Aquí están los datos financieros:\n' + dataSummary + '\n\nGenera el LaTeX.' }
+        { role: 'user', content: 'Ingresos Q' + parseFloat(data.totalIncome).toFixed(2) +
+          ', gastos Q' + parseFloat(data.totalExpense).toFixed(2) +
+          ', balance Q' + parseFloat(data.totalBalance).toFixed(2) +
+          ', ' + data.businesses.length + ' negocios. Top: ' + topBiz }
       ],
-      max_tokens: 1200,
-      temperature: 0.3
+      max_tokens: 200,
+      temperature: 0.2
     })
   });
   var groqData = await groqRes.json();
-  var latex = groqData.choices && groqData.choices[0] ? groqData.choices[0].message.content : null;
-  if (!latex) return null;
-
-  // Limpiar posibles wrappers markdown
-  latex = latex.replace(/^```(?:latex)?\n?/i, '').replace(/```$/i, '').trim();
-  return latex;
+  var raw = groqData.choices && groqData.choices[0] ? groqData.choices[0].message.content : null;
+  if (!raw) return null;
+  try { return JSON.parse(raw.replace(/```json|```/g, '').trim()); } catch(_) { return null; }
 }
 
 // ── Generar el .tex del informe ──
-function buildTex(data, aiAnalysis) {
+function buildTex(data, aiAnalysis, style) {
   const genDate = new Date().toLocaleDateString('es-GT');
   const balColor = data.totalBalance >= 0 ? 'colorgreen' : 'colorred';
+
+  // Aplicar estilo generado por IA si existe
+  var reportTitle = style && style.title ? esc(style.title) : 'Informe Financiero';
+  var reportSub   = style && style.subtitle ? esc(style.subtitle) : esc(data.period);
+  var highlightText = style && style.highlight ? esc(style.highlight) : '';
+  var accentColor   = style && style.color_accent ? style.color_accent : '6C5CE7';
+  var theme         = style && style.theme ? style.theme : 'moderno';
+
+  // Tema de colores
+  var cAccent = accentColor;
+  var cDark   = theme === 'clasico' ? '2C3E50' : '1A1A2E';
+  var cGreen  = '00875A';
+  var cRed    = 'C0392B';
 
   // Tabla de negocios
   const bizRows = data.businesses.map(b => {
@@ -262,11 +261,11 @@ ${txRows}
 \\setmainfont{DejaVu Sans}
 
 % Colores
-\\definecolor{accent}{HTML}{6C5CE7}
+\\definecolor{accent}{HTML}{${cAccent}}
 \\definecolor{accentbg}{HTML}{EDE9FF}
-\\definecolor{colorgreen}{HTML}{00875A}
-\\definecolor{colorred}{HTML}{C0392B}
-\\definecolor{darkbg}{HTML}{1A1A2E}
+\\definecolor{colorgreen}{HTML}{${cGreen}}
+\\definecolor{colorred}{HTML}{${cRed}}
+\\definecolor{darkbg}{HTML}{${cDark}}
 \\definecolor{lightgray}{HTML}{F4F4F8}
 \\definecolor{medgray}{HTML}{888899}
 
@@ -291,8 +290,8 @@ ${txRows}
     \\vspace{12pt}
     \\centering
     {\\fontsize{26}{30}\\selectfont\\bfseries\\color{accent} Centro de Mando}\\\\[6pt]
-    {\\large\\color{white} Informe Financiero}\\\\[4pt]
-    {\\normalsize\\color{medgray} ${esc(data.period)}}\\\\[6pt]
+    {\\large\\color{white} ${reportTitle}}\\\\[4pt]
+    {\\normalsize\\color{medgray} ${reportSub}}\\\\[6pt]
     {\\small\\color{medgray} Generado el ${esc(genDate)} $\\cdot$ ${esc(data.dateFrom)} al ${esc(data.dateTo)}}\\\\[12pt]
   }}
 \\end{center}
@@ -312,6 +311,14 @@ ${txRows}
 \\end{tabular}
 
 \\vspace{18pt}
+
+${highlightText ? `
+% ── HIGHLIGHT IA ─────────────────────────────────────────────
+\\begin{tcolorbox}[colback=accentbg,colframe=accent,arc=6pt]
+\\textbf{\\color{accent}\\Large ${esc('✦')}} \\hspace{6pt} {\\large\\textbf{${highlightText}}}
+\\end{tcolorbox}
+\\vspace{12pt}
+` : ''}
 
 % ── DETALLE POR NEGOCIO ───────────────────────────────────────
 \\section*{Detalle por Negocio}
@@ -367,36 +374,11 @@ async function compileTex(texSource) {
 // ── generatePDF: entrada pública ──
 async function generatePDF(filter, aiAnalysis, userId, userRequest) {
   const data = await getReportData(filter, userId);
-  var tex;
-  // Intentar con IA si hay solicitud de estilo específico
+  var style = null;
   if (userRequest) {
-    try {
-      tex = await generateAITex(data, userRequest, userId);
-      if (tex) {
-        // Probar compilar, si falla caer al template estático
-        try {
-          return await compileTex(tex);
-        } catch(e) {
-          var logFile = '/tmp/cmd-report-*/report.log';
-          var log = '';
-          try {
-            var fs2 = require('fs');
-            var files = fs2.readdirSync('/tmp').filter(function(f) { return f.startsWith('cmd-report-'); }).sort();
-            if (files.length) {
-              log = fs2.readFileSync('/tmp/' + files[files.length-1] + '/report.log', 'utf8').slice(-500);
-            }
-          } catch(_) {}
-          console.error('AI LaTeX compilación falló, usando template estático. Log:', log);
-          tex = null;
-        }
-      }
-    } catch(e) {
-      console.error('AI LaTeX generación falló:', e.message);
-      tex = null;
-    }
+    try { style = await generateAIStyle(data, userRequest); } catch(e) {}
   }
-  // Fallback al template estático
-  if (!tex) tex = buildTex(data, aiAnalysis);
+  var tex = buildTex(data, aiAnalysis, style);
   return await compileTex(tex);
 }
 
