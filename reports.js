@@ -373,7 +373,6 @@ function buildPDF(data, content) {
     });
   });
 }
-}
 
 // ── generatePDF: entrada pública ──
 async function generatePDF(filter, aiAnalysis, userId, userRequest) {
