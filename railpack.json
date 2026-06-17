@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "node",
+  "deploy": {
+    "aptPackages": ["texlive-latex-base", "texlive-latex-extra", "texlive-fonts-recommended"],
+    "startCommand": "node server.js"
+  }
+}
